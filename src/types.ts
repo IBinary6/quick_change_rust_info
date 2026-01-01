@@ -49,6 +49,12 @@ export interface ProfileConfig {
     [key: string]: any;
 }
 
+export interface EnvObject {
+    value: string;
+    force?: boolean;
+    relative?: boolean;
+}
+
 export interface CargoConfig {
     source?: Record<string, SourceEntry>;
     registry?: RegistryConfig;
@@ -57,7 +63,7 @@ export interface CargoConfig {
     https?: HttpsConfig;
     build?: BuildConfig;
     target?: Record<string, TargetConfig>;
-    env?: Record<string, any>;
+    env?: Record<string, string | EnvObject>;
     profile?: Record<string, ProfileConfig>;
     [key: string]: any;
 }
@@ -91,4 +97,24 @@ export const WRAPPER_OPTIONS = [
     { value: "", label: "无 (不使用缓存)" },
     { value: "sccache", label: "sccache (推荐)" },
     { value: "ccache", label: "ccache" },
+];
+
+// 常用 Rustflags
+export const COMMON_RUSTFLAGS = [
+    { value: "-C target-feature=+crt-static", label: "Static CRT", desc: "静态链接运行时(Windows)" },
+    { value: "-C prefer-dynamic", label: "Prefer Dynamic", desc: "优先动态链接" },
+    { value: "-C link-arg=-s", label: "Strip Symbols", desc: "剥离符号(减小体积)" },
+    { value: "-C target-cpu=native", label: "Native CPU", desc: "针对当前CPU优化" },
+    { value: "--cfg tokio_unstable", label: "Tokio Unstable", desc: "开启 Tokio 不稳定特性" },
+];
+
+// 代理预设
+export const PROXY_PRESETS = [
+  { label: "无代理", value: "" },
+  { label: "Clash (7890)", value: "127.0.0.1:7890" },
+  { label: "Clash (7891)", value: "127.0.0.1:7891" },
+  { label: "Clash Rev (7897)", value: "127.0.0.1:7897" },
+  { label: "V2Ray (10808)", value: "127.0.0.1:10808" },
+  { label: "V2Ray (1080)", value: "127.0.0.1:1080" },
+  { label: "自定义...", value: "custom" },
 ];

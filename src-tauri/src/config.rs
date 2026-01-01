@@ -12,10 +12,24 @@ pub struct CargoConfig {
     pub https: Option<HttpsConfig>,
     pub build: Option<BuildConfig>,
     pub target: Option<HashMap<String, TargetConfig>>,
-    pub env: Option<HashMap<String, toml::Value>>,
+    pub env: Option<HashMap<String, EnvValue>>,
     pub profile: Option<HashMap<String, ProfileConfig>>,
     #[serde(flatten)]
     pub other: HashMap<String, toml::Value>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(untagged)]
+pub enum EnvValue {
+    Simple(String),
+    Object(EnvObject),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct EnvObject {
+    pub value: String,
+    pub force: Option<bool>,
+    pub relative: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
