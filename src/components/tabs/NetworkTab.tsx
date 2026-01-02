@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CargoConfig, NetConfig, HttpConfig, HttpsConfig, PROXY_PRESETS } from "@/types";
 
 interface Props {
@@ -12,6 +12,30 @@ export function NetworkTab({ config, setConfig, showToast }: Props) {
   const [httpsProxyMode, setHttpsProxyMode] = useState<"preset" | "custom">("preset");
   const [customHttpProxy, setCustomHttpProxy] = useState("");
   const [customHttpsProxy, setCustomHttpsProxy] = useState("");
+
+  useEffect(() => {
+    const httpProxy = config.http?.proxy || "";
+    const httpIsPreset = PROXY_PRESETS.some(p => p.value === httpProxy);
+    if (httpProxy && !httpIsPreset) {
+      setHttpProxyMode("custom");
+      setCustomHttpProxy(httpProxy);
+    } else {
+      setHttpProxyMode("preset");
+      setCustomHttpProxy("");
+    }
+  }, [config.http?.proxy]);
+
+  useEffect(() => {
+    const httpsProxy = config.https?.proxy || "";
+    const httpsIsPreset = PROXY_PRESETS.some(p => p.value === httpsProxy);
+    if (httpsProxy && !httpsIsPreset) {
+      setHttpsProxyMode("custom");
+      setCustomHttpsProxy(httpsProxy);
+    } else {
+      setHttpsProxyMode("preset");
+      setCustomHttpsProxy("");
+    }
+  }, [config.https?.proxy]);
 
   const updateNet = (key: string, value: boolean) => {
     const newNet: NetConfig = { ...config.net };
@@ -62,7 +86,7 @@ export function NetworkTab({ config, setConfig, showToast }: Props) {
 
   const applyCustomHttpProxy = () => {
     if (customHttpProxy && !validateProxyFormat(customHttpProxy)) {
-      showToast("❌ 代理格式无效，应为 host:port 格式", "error");
+      showToast("代理格式无效，应为 host:port 格式", "error");
       return;
     }
     const newHttp = { ...config.http, proxy: customHttpProxy || undefined };
@@ -72,7 +96,7 @@ export function NetworkTab({ config, setConfig, showToast }: Props) {
 
   const applyCustomHttpsProxy = () => {
     if (customHttpsProxy && !validateProxyFormat(customHttpsProxy)) {
-      showToast("❌ 代理格式无效，应为 host:port 格式", "error");
+      showToast("代理格式无效，应为 host:port 格式", "error");
       return;
     }
     const newHttps = { ...config.https, proxy: customHttpsProxy || undefined };
@@ -108,7 +132,7 @@ export function NetworkTab({ config, setConfig, showToast }: Props) {
           </select>
           {httpProxyMode === "custom" && (
             <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-              <input type="text" className="input" placeholder="如 192.168.1.1:8080" value={customHttpProxy} onChange={(e) => setCustomHttpProxy(e.target.value)} style={{ flex: 1 }} />
+              <input type="text" className="input" placeholder="如 127.0.0.1:8080" value={customHttpProxy} onChange={(e) => setCustomHttpProxy(e.target.value)} style={{ flex: 1 }} />
               <button className="btn btn-primary btn-sm" onClick={applyCustomHttpProxy}>应用</button>
             </div>
           )}
@@ -126,7 +150,7 @@ export function NetworkTab({ config, setConfig, showToast }: Props) {
           </select>
           {httpsProxyMode === "custom" && (
             <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-              <input type="text" className="input" placeholder="如 192.168.1.1:8080" value={customHttpsProxy} onChange={(e) => setCustomHttpsProxy(e.target.value)} style={{ flex: 1 }} />
+              <input type="text" className="input" placeholder="如 127.0.0.1:8080" value={customHttpsProxy} onChange={(e) => setCustomHttpsProxy(e.target.value)} style={{ flex: 1 }} />
               <button className="btn btn-primary btn-sm" onClick={applyCustomHttpsProxy}>应用</button>
             </div>
           )}

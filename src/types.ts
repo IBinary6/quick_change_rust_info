@@ -68,6 +68,13 @@ export interface CargoConfig {
     [key: string]: any;
 }
 
+export interface BackupEntry {
+    name: string;
+    path: string;
+    modified: number;
+    size: number;
+}
+
 // 常用目标平台
 export const TARGET_PLATFORMS = [
     { value: "", label: "默认 (当前系统)" },
@@ -101,11 +108,10 @@ export const WRAPPER_OPTIONS = [
 
 // 常用 Rustflags
 export const COMMON_RUSTFLAGS = [
-    { value: "-C target-feature=+crt-static", label: "Static CRT", desc: "静态链接运行时(Windows)" },
-    { value: "-C prefer-dynamic", label: "Prefer Dynamic", desc: "优先动态链接" },
-    { value: "-C link-arg=-s", label: "Strip Symbols", desc: "剥离符号(减小体积)" },
-    { value: "-C target-cpu=native", label: "Native CPU", desc: "针对当前CPU优化" },
-    { value: "--cfg tokio_unstable", label: "Tokio Unstable", desc: "开启 Tokio 不稳定特性" },
+    { value: "-Ctarget-feature=+crt-static", label: "Static CRT", desc: "静态链接运行时(Windows)" },
+    { value: "-Cprefer-dynamic", label: "Prefer Dynamic", desc: "优先动态链接" },
+    { value: "-Clink-arg=-s", label: "Strip Symbols", desc: "剥离符号(减小体积)" },
+    { value: "-Ctarget-cpu=native", label: "Native CPU", desc: "针对当前CPU优化" },
 ];
 
 // 代理预设

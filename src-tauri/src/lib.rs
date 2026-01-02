@@ -1,8 +1,9 @@
 mod config;
 
-use config::CargoConfig;
+use config::{BackupEntry, CargoConfig};
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
+use std::path::Path;
 use std::process::Command;
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
@@ -15,13 +16,13 @@ fn create_hidden_command(program: &str) -> Command {
 }
 
 #[tauri::command]
-fn get_config() -> Result<CargoConfig, String> {
-    config::load_config()
+fn get_config(path: Option<String>) -> Result<CargoConfig, String> {
+    config::load_config(path.as_deref())
 }
 
 #[tauri::command]
-fn save_config(config: CargoConfig) -> Result<(), String> {
-    config::save_config(&config)
+fn save_config(config: CargoConfig, path: Option<String>) -> Result<(), String> {
+    config::save_config(&config, path.as_deref())
 }
 
 #[tauri::command]
@@ -37,30 +38,103 @@ fn get_current_target() -> String {
 }
 
 #[tauri::command]
-fn open_config_folder() -> Result<(), String> {
-    let path = config::get_cargo_config_path();
-    if let Some(parent) = path.parent() {
-        #[cfg(target_os = "windows")]
-        {
-            Command::new("explorer")
-                .arg(parent)
-                .spawn()
-                .map_err(|e| format!("Failed to open folder: {}", e))?;
-        }
-        #[cfg(not(target_os = "windows"))]
-        {
-            Command::new("open")
-                .arg(parent)
-                .spawn()
-                .map_err(|e| format!("Failed to open folder: {}", e))?;
-        }
+fn open_config_folder(path: Option<String>) -> Result<(), String> {
+    let path = config::resolve_config_path(path.as_deref());
+    let target = if path.is_dir() {
+        path
+    } else {
+        path.parent()
+            .unwrap_or_else(|| Path::new("."))
+            .to_path_buf()
+    };
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer")
+            .arg(&target)
+            .spawn()
+            .map_err(|e| format!("Failed to open folder: {}", e))?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(&target)
+            .spawn()
+            .map_err(|e| format!("Failed to open folder: {}", e))?;
+    }
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    {
+        Command::new("xdg-open")
+            .arg(&target)
+            .spawn()
+            .map_err(|e| format!("Failed to open folder: {}", e))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn open_folder(path: String) -> Result<(), String> {
+    let target = std::path::PathBuf::from(&path);
+    if !target.exists() {
+        return Err("目录不存在".to_string());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer")
+            .arg(&target)
+            .spawn()
+            .map_err(|e| format!("Failed to open folder: {}", e))?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(&target)
+            .spawn()
+            .map_err(|e| format!("Failed to open folder: {}", e))?;
+    }
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    {
+        Command::new("xdg-open")
+            .arg(&target)
+            .spawn()
+            .map_err(|e| format!("Failed to open folder: {}", e))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn open_config_file(path: Option<String>) -> Result<(), String> {
+    let path = config::resolve_config_path(path.as_deref());
+    if !path.exists() {
+        return Err("配置文件不存在".to_string());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let path_str = path.to_string_lossy().to_string();
+        create_hidden_command("cmd")
+            .args(["/C", "start", "", &path_str])
+            .spawn()
+            .map_err(|e| format!("Failed to open file: {}", e))?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(path)
+            .spawn()
+            .map_err(|e| format!("Failed to open file: {}", e))?;
+    }
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    {
+        Command::new("xdg-open")
+            .arg(path)
+            .spawn()
+            .map_err(|e| format!("Failed to open file: {}", e))?;
     }
     Ok(())
 }
 
 #[tauri::command]
 fn check_command_exists(cmd: String) -> bool {
-    // Windows logic
     if cfg!(target_os = "windows") {
         create_hidden_command("where")
             .arg(&cmd)
@@ -68,7 +142,6 @@ fn check_command_exists(cmd: String) -> bool {
             .map(|o| o.status.success())
             .unwrap_or(false)
     } else {
-        // Unix logic
         Command::new("which")
             .arg(&cmd)
             .output()
@@ -79,7 +152,59 @@ fn check_command_exists(cmd: String) -> bool {
 
 #[tauri::command]
 fn check_file_exists(path: String) -> bool {
-    std::path::Path::new(&path).exists()
+    config::expand_path(&path).is_file()
+}
+
+#[tauri::command]
+fn get_backup_dir(path: Option<String>) -> String {
+    config::get_backup_dir(path.as_deref())
+        .to_string_lossy()
+        .to_string()
+}
+
+#[tauri::command]
+fn list_backups(path: Option<String>) -> Result<Vec<BackupEntry>, String> {
+    config::list_backups(path.as_deref())
+}
+
+#[tauri::command]
+fn create_backup(path: Option<String>, label: Option<String>) -> Result<BackupEntry, String> {
+    config::create_backup(path.as_deref(), label)
+}
+
+#[tauri::command]
+fn restore_backup(path: Option<String>, name: String) -> Result<(), String> {
+    config::restore_backup(path.as_deref(), name)
+}
+
+#[tauri::command]
+fn clear_backups(path: Option<String>) -> Result<usize, String> {
+    config::clear_backups(path.as_deref())
+}
+
+#[tauri::command]
+fn delete_backup(path: Option<String>, name: String) -> Result<(), String> {
+    config::delete_backup(path.as_deref(), name)
+}
+
+#[tauri::command]
+fn rename_backup(path: Option<String>, old_name: String, new_name: String) -> Result<(), String> {
+    config::rename_backup(path.as_deref(), old_name, new_name)
+}
+
+#[tauri::command]
+fn import_config(path: String) -> Result<CargoConfig, String> {
+    config::import_config_from_path(&path)
+}
+
+#[tauri::command]
+fn export_config(config: CargoConfig, path: String) -> Result<(), String> {
+    config::export_config_to_path(&config, &path)
+}
+
+#[tauri::command]
+fn preview_config(config: CargoConfig) -> Result<String, String> {
+    config::serialize_config(&config)
 }
 
 #[tauri::command]
@@ -149,14 +274,27 @@ async fn install_target(target: String) -> Result<(), String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             get_config,
             save_config,
             get_config_path,
             get_current_target,
             open_config_folder,
+            open_folder,
+            open_config_file,
             check_command_exists,
             check_file_exists,
+            get_backup_dir,
+            list_backups,
+            create_backup,
+            restore_backup,
+            clear_backups,
+            delete_backup,
+            rename_backup,
+            import_config,
+            export_config,
+            preview_config,
             install_sccache,
             get_installed_targets,
             install_target

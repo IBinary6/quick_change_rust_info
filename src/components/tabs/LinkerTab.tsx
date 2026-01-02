@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-// import { open } from "@tauri-apps/plugin-dialog"; // 注意：我们需要确认是否安装了 plugin-dialog，如果没有则暂时使用 input
+import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { CargoConfig, TargetConfig, LINKER_OPTIONS, COMMON_RUSTFLAGS } from "@/types";
 
@@ -10,7 +10,7 @@ interface Props {
 }
 
 export function LinkerTab({ config, setConfig, currentTarget }: Props) {
-  const [linkerStatus, setLinkerStatus] = useState<boolean | null>(null);
+  const [linkerStatus, setLinkerStatus] = useState<{ ok: boolean; mode: "file" | "command" } | null>(null);
   const [isManualCustom, setIsManualCustom] = useState(false);
 
   const getTargetLinker = () => {
@@ -28,6 +28,25 @@ export function LinkerTab({ config, setConfig, currentTarget }: Props) {
   }, [isCustomLinker]);
 
   const showCustomInput = isCustomLinker || isManualCustom;
+
+  const normalizeLinkerInput = (value: string) => {
+    const trimmed = value.trim();
+    if (trimmed.length >= 2) {
+      const firstChar = trimmed[0];
+      const lastChar = trimmed[trimmed.length - 1];
+      if ((firstChar === "\"" && lastChar === "\"") || (firstChar === "'" && lastChar === "'")) {
+        return trimmed.slice(1, -1).trim();
+      }
+    }
+    return trimmed;
+  };
+
+  const isPathLike = (value: string) => {
+    if (!value) return false;
+    if (value.startsWith("~") || value.startsWith("./") || value.startsWith("../")) return true;
+    if (/^[A-Za-z]:/.test(value)) return true;
+    return value.includes("/") || value.includes("\\");
+  };
 
   const updateTarget = (targetName: string, key: string, value: any) => {
     const targets = { ...config.target };
@@ -62,15 +81,39 @@ export function LinkerTab({ config, setConfig, currentTarget }: Props) {
     updateTarget(currentTarget, "linker", val || undefined);
   };
 
-  const checkCustomLinker = async () => {
-    const pathToCheck = getTargetLinker();
+  const checkCustomLinker = async (input?: string) => {
+    const rawValue = input ?? getTargetLinker();
+    const pathToCheck = normalizeLinkerInput(rawValue);
     if (!pathToCheck) return;
     try {
-      const exists = await invoke<boolean>("check_file_exists", { path: pathToCheck });
-      setLinkerStatus(exists);
+      const isFilePath = isPathLike(pathToCheck);
+      const exists = isFilePath
+        ? await invoke<boolean>("check_file_exists", { path: pathToCheck })
+        : await invoke<boolean>("check_command_exists", { cmd: pathToCheck });
+      setLinkerStatus({ ok: exists, mode: isFilePath ? "file" : "command" });
     } catch (e) {
       console.error(e);
-      setLinkerStatus(false);
+      setLinkerStatus({ ok: false, mode: isPathLike(pathToCheck) ? "file" : "command" });
+    }
+  };
+
+  const handlePickLinker = async () => {
+    try {
+      const currentValue = normalizeLinkerInput(getTargetLinker());
+      const defaultPath = isPathLike(currentValue) ? currentValue : undefined;
+      const selected = await open({
+        title: "选择链接器文件",
+        defaultPath,
+        multiple: false,
+        directory: false
+      });
+      if (typeof selected === "string" && selected) {
+        setLinkerStatus(null);
+        updateTarget(currentTarget, "linker", selected);
+        await checkCustomLinker(selected);
+      }
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -127,25 +170,36 @@ export function LinkerTab({ config, setConfig, currentTarget }: Props) {
                      setLinkerStatus(null);
                      updateTarget(currentTarget, "linker", newPath || undefined);
                    }}
-                   placeholder="C:\Path\To\linker.exe 或 /usr/bin/mold"
+                   onBlur={(e) => {
+                     const newPath = e.target.value;
+                     if (!newPath) return;
+                     const normalized = normalizeLinkerInput(newPath);
+                     if (normalized !== newPath) {
+                       updateTarget(currentTarget, "linker", normalized || undefined);
+                     }
+                     if (!normalized) return;
+                     checkCustomLinker(normalized);
+                   }}
+                   placeholder="C:/Path/To/linker.exe 或 /usr/bin/mold"
                  />
                  <button
                    className="btn btn-secondary"
-                   onClick={() => {
-                     const pathToCheck = getTargetLinker();
-                     if (!pathToCheck) return;
-                     checkCustomLinker();
-                   }}
-                   disabled={!getTargetLinker()}
+                   onClick={handlePickLinker}
                  >
-                   验证路径
+                   选择文件
                  </button>
                </div>
-               {linkerStatus !== null && (
-                 <p style={{ marginTop: 4, fontSize: 12, color: linkerStatus ? "var(--accent-green)" : "#ef4444" }}>
-                   {linkerStatus ? "✅ 路径有效" : "❌ 路径无效或文件不存在"}
-                 </p>
-               )}
+                {linkerStatus !== null && (
+                  <p style={{ marginTop: 4, fontSize: 12, color: linkerStatus.ok ? "var(--accent-green)" : "#ef4444" }}>
+                    {linkerStatus.ok
+                      ? linkerStatus.mode === "command"
+                        ? "命令可用"
+                        : "路径有效"
+                      : linkerStatus.mode === "command"
+                      ? "命令不存在"
+                      : "路径无效或文件不存在"}
+                  </p>
+                )}
             </div>
           )}
         </div>
