@@ -16,6 +16,9 @@ export interface HttpConfig {
     proxy?: string;
     "check-revoke"?: boolean;
     multiplexing?: boolean;
+    cainfo?: string;
+    timeout?: number;
+    "low-speed-limit"?: number;
 }
 
 export interface HttpsConfig {

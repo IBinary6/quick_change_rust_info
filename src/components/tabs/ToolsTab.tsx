@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { confirm } from "@tauri-apps/plugin-dialog";
-import { CargoConfig, TARGET_PLATFORMS, WRAPPER_OPTIONS, EnvObject } from "@/types";
+import { CargoConfig, TARGET_PLATFORMS, WRAPPER_OPTIONS } from "@/types";
 
 interface Props {
   config: CargoConfig;
@@ -12,7 +12,9 @@ interface Props {
 
 interface CacheStats {
   registry_size: number;
+  registry_path: string;
   git_size: number;
+  git_path: string;
 }
 
 export function ToolsTab({ config, setConfig, showToast }: Props) {
@@ -101,14 +103,7 @@ export function ToolsTab({ config, setConfig, showToast }: Props) {
     }
   }
   
-  const setRustupMirror = (name: string, dist: string, root: string) => {
-    const newEnv = { ...(config.env || {}) };
-    newEnv["RUSTUP_DIST_SERVER"] = { value: dist, force: true };
-    newEnv["RUSTUP_UPDATE_ROOT"] = { value: root, force: true };
-    
-    setConfig({ ...config, env: newEnv });
-    showToast(`已应用 ${name} 镜像源`, "success");
-  };
+
 
   const updateBuild = (key: string, value: any) => {
     const newBuild = { ...config.build };
@@ -149,20 +144,32 @@ export function ToolsTab({ config, setConfig, showToast }: Props) {
              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                <div style={{ background: "var(--bg-secondary)", padding: 10, borderRadius: 6, border: "1px solid var(--border-color)", display: "flex", flexDirection: "column", gap: 6 }}>
                   <div style={{ fontSize: 12, fontWeight: 600 }}>📦 Registry 缓存</div>
+                  <div style={{ fontSize: 11, color: "var(--text-secondary)", wordBreak: "break-all" }}>{cacheStats.registry_path}</div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                      <span style={{ fontSize: 14, color: "var(--accent-cyan)" }}>{formatSize(cacheStats.registry_size)}</span>
-                     <button className="btn btn-secondary btn-sm" style={{ color: "var(--error-color)", fontSize: 11, padding: "2px 8px" }} onClick={() => handleCleanup("registry", cacheStats.registry_size)} disabled={cleaning || cacheStats.registry_size === 0}>
-                       清理
-                     </button>
+                     <div style={{ display: "flex", gap: 6 }}>
+                       <button className="btn btn-secondary btn-sm" style={{ padding: "2px 8px", fontSize: 11 }} onClick={() => invoke("open_folder", { path: cacheStats.registry_path })}>
+                         📂 打开
+                       </button>
+                       <button className="btn btn-secondary btn-sm" style={{ color: "var(--error-color)", fontSize: 11, padding: "2px 8px" }} onClick={() => handleCleanup("registry", cacheStats.registry_size)} disabled={cleaning || cacheStats.registry_size === 0}>
+                         清理
+                       </button>
+                     </div>
                   </div>
                </div>
                <div style={{ background: "var(--bg-secondary)", padding: 10, borderRadius: 6, border: "1px solid var(--border-color)", display: "flex", flexDirection: "column", gap: 6 }}>
                   <div style={{ fontSize: 12, fontWeight: 600 }}>🐙 Git 缓存</div>
+                  <div style={{ fontSize: 11, color: "var(--text-secondary)", wordBreak: "break-all" }}>{cacheStats.git_path}</div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                      <span style={{ fontSize: 14, color: "var(--accent-blue)" }}>{formatSize(cacheStats.git_size)}</span>
-                     <button className="btn btn-secondary btn-sm" style={{ color: "var(--error-color)", fontSize: 11, padding: "2px 8px" }} onClick={() => handleCleanup("git", cacheStats.git_size)} disabled={cleaning || cacheStats.git_size === 0}>
-                       清理
-                     </button>
+                     <div style={{ display: "flex", gap: 6 }}>
+                       <button className="btn btn-secondary btn-sm" style={{ padding: "2px 8px", fontSize: 11 }} onClick={() => invoke("open_folder", { path: cacheStats.git_path })}>
+                         📂 打开
+                       </button>
+                       <button className="btn btn-secondary btn-sm" style={{ color: "var(--error-color)", fontSize: 11, padding: "2px 8px" }} onClick={() => handleCleanup("git", cacheStats.git_size)} disabled={cleaning || cacheStats.git_size === 0}>
+                         清理
+                       </button>
+                     </div>
                   </div>
                </div>
              </div>
@@ -170,28 +177,7 @@ export function ToolsTab({ config, setConfig, showToast }: Props) {
         </div>
       </div>
       
-      {/* Rustup 镜像卡片 */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-header">
-           <div className="card-title"><span style={{ color: "var(--accent-orange)" }}>🦀</span> Rustup 更新加速</div>
-        </div>
-        <div className="card-content">
-           <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 10 }}>
-             配置环境变量以加速 `rustup update` 和工具链下载 (针对国内用户)
-           </div>
-           <div style={{ display: "flex", gap: 12 }}>
-              <button className="btn btn-secondary btn-sm" onClick={() => setRustupMirror("Rsproxy", "https://rsproxy.cn/rustup", "https://rsproxy.cn/rustup")}>
-                 🚀 Rsproxy (推荐)
-              </button>
-              <button className="btn btn-secondary btn-sm" onClick={() => setRustupMirror("TUNA", "https://mirrors.tuna.tsinghua.edu.cn/rustup", "https://mirrors.tuna.tsinghua.edu.cn/rustup")}>
-                 🐟 清华 TUNA
-              </button>
-              <button className="btn btn-secondary btn-sm" onClick={() => setRustupMirror("USTC", "https://mirrors.ustc.edu.cn/rustup", "https://mirrors.ustc.edu.cn/rustup")}>
-                 🏫 中科大 USTC
-              </button>
-           </div>
-        </div>
-      </div>
+      {/* Rustup Mirror Card Removed (Moved to RegistryTab) */}
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">

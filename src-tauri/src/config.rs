@@ -82,6 +82,10 @@ pub struct HttpConfig {
     #[serde(rename = "check-revoke")]
     pub check_revoke: Option<bool>,
     pub multiplexing: Option<bool>,
+    pub cainfo: Option<String>,
+    pub timeout: Option<u32>,
+    #[serde(rename = "low-speed-limit")]
+    pub low_speed_limit: Option<u32>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
@@ -127,7 +131,7 @@ pub struct ProfileConfig {
     pub other: HashMap<String, toml::Value>,
 }
 
-fn get_home_dir() -> String {
+pub fn get_home_dir() -> String {
     if cfg!(windows) {
         std::env::var("USERPROFILE").unwrap_or_else(|_| ".".to_string())
     } else {

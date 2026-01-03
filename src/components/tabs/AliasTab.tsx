@@ -44,7 +44,7 @@ export function AliasTab({ config, setConfig }: Props) {
     <div className="card">
       <div className="card-header">
         <div className="card-title"><span style={{ color: "var(--accent-cyan)" }}>⌨️</span> 别名配置 (Alias)</div>
-        <div className="card-desc">配置 `cargo` 命令别名，例如 `cargo b` -> `cargo build`</div>
+        <div className="card-desc">配置 `cargo` 命令别名，例如 `cargo b` -&gt; `cargo build`</div>
       </div>
       <div className="card-content">
         

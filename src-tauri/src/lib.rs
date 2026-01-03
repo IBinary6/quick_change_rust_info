@@ -1,6 +1,7 @@
 mod config;
 
 use config::{BackupEntry, CargoConfig};
+use serde::Serialize;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 use std::path::Path;
@@ -273,7 +274,9 @@ async fn install_target(target: String) -> Result<(), String> {
 #[derive(Debug, Serialize)]
 pub struct CacheStats {
     registry_size: u64,
+    registry_path: String,
     git_size: u64,
+    git_path: String,
 }
 
 fn get_dir_size(path: &Path) -> u64 {
@@ -307,7 +310,9 @@ async fn get_cargo_cache_stats() -> Result<CacheStats, String> {
 
     Ok(CacheStats {
         registry_size,
+        registry_path: registry_path.to_string_lossy().to_string(),
         git_size,
+        git_path: git_path.to_string_lossy().to_string(),
     })
 }
 

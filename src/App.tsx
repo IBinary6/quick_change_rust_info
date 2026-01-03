@@ -217,7 +217,7 @@ function App() {
         
         <nav style={{ marginTop: 12 }}>
           <div className={`nav-item ${activeTab === "registry" ? "active" : ""}`} onClick={() => setActiveTab("registry")}>
-            <span>📦</span> 下载源
+            <span>📦</span> 源与镜像
           </div>
           <div className={`nav-item ${activeTab === "build" ? "active" : ""}`} onClick={() => setActiveTab("build")}>
             <span>⚡</span> 编译优化
@@ -269,7 +269,7 @@ function App() {
         }}>
           <div>
             <h2 style={{ fontSize: "18px", fontWeight: 600 }}>
-              {activeTab === "registry" && "下载源配置"}
+              {activeTab === "registry" && "源与镜像配置"}
               {activeTab === "build" && "编译优化"}
               {activeTab === "tools" && "常用工具 & 缓存"}
               {activeTab === "alias" && "命令别名"}
