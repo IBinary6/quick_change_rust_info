@@ -22,6 +22,16 @@ export interface HttpsConfig {
     proxy?: string;
 }
 
+export interface DocConfig {
+    browser?: string;
+    "open-result"?: boolean;
+}
+
+export interface RegistryEntry {
+    index?: string;
+    token?: string;
+}
+
 export interface BuildConfig {
     jobs?: number;
     target?: string;
@@ -66,6 +76,9 @@ export interface CargoConfig {
     target?: Record<string, TargetConfig>;
     env?: Record<string, string | EnvObject>;
     profile?: Record<string, ProfileConfig>;
+    alias?: Record<string, string>;
+    doc?: DocConfig;
+    registries?: Record<string, RegistryEntry>;
     [key: string]: any;
 }
 

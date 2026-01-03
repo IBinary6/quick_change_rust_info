@@ -23,8 +23,24 @@ pub struct CargoConfig {
     pub target: Option<HashMap<String, TargetConfig>>,
     pub env: Option<HashMap<String, EnvValue>>,
     pub profile: Option<HashMap<String, ProfileConfig>>,
+    pub alias: Option<HashMap<String, String>>,
+    pub doc: Option<DocConfig>,
+    pub registries: Option<HashMap<String, RegistryEntry>>, // Allow custom registries
     #[serde(flatten)]
     pub other: HashMap<String, toml::Value>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+pub struct DocConfig {
+    pub browser: Option<String>,
+    #[serde(rename = "open-result")]
+    pub open_result: Option<bool>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+pub struct RegistryEntry {
+    pub index: Option<String>,
+    pub token: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

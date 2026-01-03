@@ -1,4 +1,4 @@
-import { CargoConfig, ProfileConfig } from "@/types";
+import { CargoConfig, ProfileConfig, DocConfig } from "@/types";
 
 interface Props {
   config: CargoConfig;
@@ -85,7 +85,18 @@ export function BuildTab({ config, setConfig, profileType, setProfileType }: Pro
 
   const currentPreset = detectPreset();
 
+  const updateDoc = (key: string, value: any) => {
+     const newDoc: DocConfig = { ...config.doc };
+     if (value === "" || value === undefined || value === null) {
+        delete (newDoc as any)[key];
+     } else {
+        (newDoc as any)[key] = value;
+     }
+     setConfig({ ...config, doc: newDoc });
+  };
+
   return (
+    <>
     <div className="card">
       <div className="card-header">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -227,5 +238,47 @@ export function BuildTab({ config, setConfig, profileType, setProfileType }: Pro
         </div>
       </div>
     </div>
+
+    {/* 文档配置卡片 */}
+    <div className="card">
+      <div className="card-header">
+        <div className="card-title"><span style={{ color: "var(--accent-blue)" }}>📚</span> 文档生成 (Cargo Doc)</div>
+      </div>
+      <div className="card-content">
+        <div className="form-row">
+          <div>
+             <div className="form-label">默认浏览器</div>
+             <div className="form-hint">`cargo doc --open` 使用的程序</div>
+          </div>
+          <input 
+            className="input" 
+            placeholder="例如: chromium" 
+            style={{ width: 180 }}
+            value={config.doc?.browser || ""}
+            onChange={(e) => updateDoc("browser", e.target.value)}
+          />
+        </div>
+        <div className="form-row">
+          <div>
+            <div className="form-label">自动打开 (open-result)</div>
+            <div className="form-hint">每次生成文档自动打开浏览器</div>
+          </div>
+           <select 
+             className="select" 
+             style={{ width: 180 }}
+             value={config.doc?.["open-result"] === undefined ? "" : String(config.doc["open-result"])}
+             onChange={(e) => {
+               const val = e.target.value;
+               updateDoc("open-result", val === "" ? undefined : val === "true");
+             }}
+           >
+             <option value="">默认 (false)</option>
+             <option value="true">开启 (True)</option>
+             <option value="false">关闭 (False)</option>
+           </select>
+        </div>
+      </div>
+    </div>
+    </>
   );
 }

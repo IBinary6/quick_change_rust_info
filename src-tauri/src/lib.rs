@@ -270,6 +270,72 @@ async fn install_target(target: String) -> Result<(), String> {
     }
 }
 
+#[derive(Debug, Serialize)]
+pub struct CacheStats {
+    registry_size: u64,
+    git_size: u64,
+}
+
+fn get_dir_size(path: &Path) -> u64 {
+    let mut total_size = 0;
+    if let Ok(entries) = std::fs::read_dir(path) {
+        for entry in entries {
+            if let Ok(entry) = entry {
+                if let Ok(metadata) = entry.metadata() {
+                    if metadata.is_dir() {
+                        total_size += get_dir_size(&entry.path());
+                    } else {
+                        total_size += metadata.len();
+                    }
+                }
+            }
+        }
+    }
+    total_size
+}
+
+#[tauri::command]
+async fn get_cargo_cache_stats() -> Result<CacheStats, String> {
+    let home = config::get_home_dir();
+    let cargo_home = Path::new(&home).join(".cargo");
+
+    let registry_path = cargo_home.join("registry");
+    let git_path = cargo_home.join("git");
+
+    let registry_size = get_dir_size(&registry_path);
+    let git_size = get_dir_size(&git_path);
+
+    Ok(CacheStats {
+        registry_size,
+        git_size,
+    })
+}
+
+#[tauri::command]
+async fn clean_cargo_cache(target: String) -> Result<(), String> {
+    let home = config::get_home_dir();
+    let cargo_home = Path::new(&home).join(".cargo");
+    let path_to_clean = match target.as_str() {
+        "registry" => cargo_home.join("registry"),
+        "git" => cargo_home.join("git"),
+        _ => return Err("Invalid target".to_string()),
+    };
+
+    if !path_to_clean.exists() {
+        return Ok(());
+    }
+
+    // Safety check: ensure we are deleting inside .cargo
+    if !path_to_clean.starts_with(&cargo_home) {
+        return Err("Safety check failed: path not in .cargo".to_string());
+    }
+
+    std::fs::remove_dir_all(&path_to_clean).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&path_to_clean).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -297,7 +363,9 @@ pub fn run() {
             preview_config,
             install_sccache,
             get_installed_targets,
-            install_target
+            install_target,
+            get_cargo_cache_stats,
+            clean_cargo_cache
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

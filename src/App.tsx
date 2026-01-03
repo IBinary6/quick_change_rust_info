@@ -9,19 +9,20 @@ import { cleanEmptyValues } from "@/lib/config";
 // Tabs
 import { RegistryTab } from "@/components/tabs/RegistryTab";
 import { BuildTab } from "@/components/tabs/BuildTab";
-import { ToolchainTab } from "@/components/tabs/ToolchainTab";
+import { ToolsTab } from "@/components/tabs/ToolsTab";
 import { LinkerTab } from "@/components/tabs/LinkerTab";
 import { NetworkTab } from "@/components/tabs/NetworkTab";
 import { EnvTab } from "@/components/tabs/EnvTab";
 import { BackupTab } from "@/components/tabs/BackupTab";
+import { AliasTab } from "@/components/tabs/AliasTab";
 
-type TabType = "registry" | "build" | "toolchain" | "linker" | "network" | "env" | "backup";
+type TabType = "registry" | "build" | "tools" | "linker" | "network" | "env" | "backup" | "alias";
 
 function App() {
   const [config, setConfig] = useState<CargoConfig>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabType>(store.get("lastActiveTab", "registry"));
+  const [activeTab, setActiveTab] = useState<TabType>((store.get("lastActiveTab", "registry") as TabType) || "registry");
   const [configPath, setConfigPath] = useState("");
   const [defaultConfigPath, setDefaultConfigPath] = useState("");
   const [currentTarget, setCurrentTarget] = useState("");
@@ -221,8 +222,11 @@ function App() {
           <div className={`nav-item ${activeTab === "build" ? "active" : ""}`} onClick={() => setActiveTab("build")}>
             <span>⚡</span> 编译优化
           </div>
-          <div className={`nav-item ${activeTab === "toolchain" ? "active" : ""}`} onClick={() => setActiveTab("toolchain")}>
-            <span>🔧</span> 工具链
+          <div className={`nav-item ${activeTab === "tools" ? "active" : ""}`} onClick={() => setActiveTab("tools")}>
+            <span>🔧</span> 常用工具
+          </div>
+          <div className={`nav-item ${activeTab === "alias" ? "active" : ""}`} onClick={() => setActiveTab("alias")}>
+            <span>⌨️</span> 别名配置
           </div>
           <div className={`nav-item ${activeTab === "linker" ? "active" : ""}`} onClick={() => setActiveTab("linker")}>
             <span>🔗</span> 链接器
@@ -267,7 +271,8 @@ function App() {
             <h2 style={{ fontSize: "18px", fontWeight: 600 }}>
               {activeTab === "registry" && "下载源配置"}
               {activeTab === "build" && "编译优化"}
-              {activeTab === "toolchain" && "工具链配置"}
+              {activeTab === "tools" && "常用工具 & 缓存"}
+              {activeTab === "alias" && "命令别名"}
               {activeTab === "linker" && "链接器配置"}
               {activeTab === "env" && "环境变量配置"}
               {activeTab === "network" && "网络设置"}
@@ -291,7 +296,8 @@ function App() {
               config={config} 
               setConfig={setConfig} 
               selectedMirror={selectedMirror} 
-              setSelectedMirror={setSelectedMirror} 
+              setSelectedMirror={setSelectedMirror}
+              showToast={showToast}
             />
           )}
 
@@ -304,13 +310,20 @@ function App() {
             />
           )}
 
-          {activeTab === "toolchain" && (
-            <ToolchainTab 
+          {activeTab === "tools" && (
+            <ToolsTab 
               config={config} 
               setConfig={setConfig}
               showToast={showToast}
             />
           )}
+
+          {activeTab === "alias" && (
+             <AliasTab 
+               config={config} 
+               setConfig={setConfig}
+             />
+           )}
 
           {activeTab === "linker" && (
             <LinkerTab 
@@ -405,5 +418,3 @@ function App() {
 }
 
 export default App;
-
-
