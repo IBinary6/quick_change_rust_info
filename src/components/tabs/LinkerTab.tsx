@@ -137,10 +137,9 @@ export function LinkerTab({ config, setConfig, currentTarget }: Props) {
 
   return (
     <>
-      <div className="card" style={{ marginBottom: 20 }}>
+      <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
-          <div className="card-title"><span style={{ color: "var(--accent-blue)" }}>🔗</span> 链接器选择</div>
-          <div className="card-desc">当前目标: <code style={{ background: "var(--bg-secondary)", padding: "2px 6px", borderRadius: 4 }}>{currentTarget}</code></div>
+          <div className="card-title"><span style={{ color: "var(--accent-blue)" }}>🔗</span> 链接器选择 <code style={{ background: "var(--bg-secondary)", padding: "2px 6px", borderRadius: 4, fontSize: 11, marginLeft: 8 }}>{currentTarget}</code></div>
         </div>
         <div className="card-content">
           <div className="form-row">
@@ -208,11 +207,10 @@ export function LinkerTab({ config, setConfig, currentTarget }: Props) {
       <div className="card">
         <div className="card-header">
           <div className="card-title"><span style={{ color: "var(--accent-cyan)" }}>📝</span> Rustflags 参数</div>
-          <div className="card-desc">高级编译器标志设置</div>
         </div>
         <div className="card-content">
-          {/* 常用 Flags 列表 */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
+          {/* 常用 Flags 列表 - 紧凑网格布局 */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
              {COMMON_RUSTFLAGS.map(flag => {
                const active = hasRustflag(flag.value);
                return (
@@ -220,30 +218,30 @@ export function LinkerTab({ config, setConfig, currentTarget }: Props) {
                    key={flag.value}
                    style={{ 
                      display: "flex", alignItems: "center", justifyContent: "space-between",
-                     padding: "8px 12px", border: "1px solid var(--border-color)", borderRadius: 8,
+                     padding: "6px 10px", border: "1px solid var(--border-color)", borderRadius: 6,
                      background: "var(--bg-secondary)"
                    }}
                  >
-                   <div>
-                     <div style={{ fontWeight: 500, fontSize: 13 }}>{flag.label}</div>
-                     <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
-                       <code style={{ background: "rgba(0,0,0,0.2)", padding: "2px 4px", borderRadius: 3 }}>{flag.value}</code> - {flag.desc}
+                   <div style={{ flex: 1, minWidth: 0 }}>
+                     <div style={{ fontWeight: 500, fontSize: 12 }}>{flag.label}</div>
+                     <div style={{ fontSize: 10, color: "var(--text-secondary)", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                       {flag.desc}
                      </div>
                    </div>
                    <div 
                      className={`switch ${active ? "active" : ""}`} 
                      onClick={() => active ? removeRustflag(flag.value) : addRustflag(flag.value)} 
-                     style={{ cursor: "pointer" }}
+                     style={{ cursor: "pointer", marginLeft: 8, flexShrink: 0 }}
                    />
                  </div>
                );
              })}
           </div>
 
-          <div className="form-label" style={{ marginBottom: 8 }}>自定义其他参数</div>
+          <div className="form-label" style={{ marginBottom: 6 }}>自定义其他参数</div>
           <textarea 
             className="input" 
-            style={{ width: "100%", height: 100, resize: "vertical", fontFamily: "monospace" }}
+            style={{ width: "100%", height: 70, resize: "vertical", fontFamily: "monospace", fontSize: 12 }}
             placeholder="每行一个参数，例如:&#10;-C link-arg=-s&#10;-C target-cpu=native"
             value={(config.target?.[currentTarget]?.rustflags || []).filter(f => !COMMON_RUSTFLAGS.some(cf => cf.value === f)).join("\n")}
             onChange={(e) => {

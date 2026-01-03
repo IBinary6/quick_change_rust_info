@@ -57,7 +57,6 @@ export function EnvTab({ config, setConfig }: Props) {
     <div className="card">
       <div className="card-header">
         <div className="card-title"><span style={{ color: "var(--accent-cyan)" }}>🔨</span> 环境变量配置</div>
-        <div className="card-desc">配置 [env] 部分，控制编译期间的环境变量</div>
       </div>
       <div className="card-content">
         {/* 现有环境列表 */}

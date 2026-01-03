@@ -46,6 +46,7 @@ export interface ProfileConfig {
     debug?: boolean | number;
     strip?: boolean | string;
     panic?: string;
+    "trim-paths"?: string;
     [key: string]: any;
 }
 

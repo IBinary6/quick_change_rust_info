@@ -13,7 +13,6 @@ export function RegistryTab({ selectedMirror, setSelectedMirror }: Props) {
     <div className="card">
       <div className="card-header">
         <div className="card-title"><span style={{ color: "var(--accent-cyan)" }}>📦</span> 镜像源选择</div>
-        <div className="card-desc">选择 Cargo 包下载镜像，国内推荐使用中科大或字节跳动源</div>
       </div>
       <div className="card-content">
         <select className="select" value={selectedMirror} onChange={(e) => setSelectedMirror(e.target.value)}>

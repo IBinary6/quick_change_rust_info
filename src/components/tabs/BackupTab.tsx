@@ -398,10 +398,9 @@ export function BackupTab({
 
   return (
     <>
-      <div className="card" style={{ marginBottom: 20 }}>
+      <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
           <div className="card-title"><span style={{ color: "var(--accent-cyan)" }}>⚙️</span> 配置位置</div>
-          <div className="card-desc">管理配置文件存储位置与快速打开</div>
         </div>
         <div className="card-content">
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -418,75 +417,48 @@ export function BackupTab({
               {isCustomPath ? "当前使用自定义路径" : "当前使用默认路径"}
             </div>
           </div>
-          <div className="form-row" style={{ marginTop: 12 }}>
-            <div>
-              <div className="form-label">快速打开</div>
-              <div className="form-hint">直接定位到配置文件或目录</div>
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn btn-secondary" onClick={handleOpenConfigFolder} disabled={!configPath}>
-                打开目录
-              </button>
-              <button className="btn btn-secondary" onClick={handleOpenConfigFile} disabled={!configPath}>
-                打开文件
-              </button>
-            </div>
-          </div>
-          <div className="form-row">
-            <div>
-              <div className="form-label">切换位置</div>
-              <div className="form-hint">支持自定义目录或指定文件</div>
-            </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button className="btn btn-secondary" onClick={handleChooseConfigDir}>
-                选择目录
-              </button>
-              <button className="btn btn-secondary" onClick={handleChooseConfigFile}>
-                选择文件
-              </button>
-              <button className="btn btn-secondary" onClick={resetConfigPath} disabled={!isCustomPath}>
-                恢复默认
-              </button>
-            </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+            <button className="btn btn-secondary btn-sm" onClick={handleOpenConfigFolder} disabled={!configPath}>
+              📂 打开目录
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={handleOpenConfigFile} disabled={!configPath}>
+              📄 打开文件
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={handleChooseConfigDir}>
+              📁 选择目录
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={handleChooseConfigFile}>
+              🔍 选择文件
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={resetConfigPath} disabled={!isCustomPath}>
+              ↩️ 恢复默认
+            </button>
           </div>
         </div>
       </div>
-      <div className="card" style={{ marginBottom: 20 }}>
+      <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
           <div className="card-title"><span style={{ color: "var(--accent-blue)" }}>🛡️</span> 备份配置</div>
-          <div className="card-desc">保存前建议先备份，便于随时回滚</div>
         </div>
         <div className="card-content">
-          <div className="form-row">
-            <div>
-              <div className="form-label">默认备份</div>
-              <div className="form-hint">自动命名，保存当前配置快照</div>
-            </div>
-            <button className="btn btn-primary" onClick={() => handleCreateBackup()} disabled={working}>
-              立即备份
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <button className="btn btn-primary btn-sm" onClick={() => handleCreateBackup()} disabled={working}>
+              💾 立即备份
             </button>
-          </div>
-          <div className="form-row" style={{ alignItems: "center" }}>
-            <div>
-              <div className="form-label">自定义备份</div>
-              <div className="form-hint">可输入名称，便于识别</div>
-            </div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input
-                className="input"
-                style={{ width: 220 }}
-                value={customName}
-                placeholder="例如：发布前"
-                onChange={(e) => setCustomName(e.target.value)}
-              />
-              <button
-                className="btn btn-secondary"
-                onClick={() => handleCreateBackup(customName)}
-                disabled={!customName.trim() || working}
-              >
-                创建备份
-              </button>
-            </div>
+            <input
+              className="input"
+              style={{ width: 180, height: 32, fontSize: 12 }}
+              value={customName}
+              placeholder="自定义名称（可选）"
+              onChange={(e) => setCustomName(e.target.value)}
+            />
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => handleCreateBackup(customName)}
+              disabled={!customName.trim() || working}
+            >
+              ✏️ 创建
+            </button>
           </div>
           {backupDir && (
             <p style={{ marginTop: 8, fontSize: 12, color: "var(--text-secondary)" }}>
@@ -496,13 +468,12 @@ export function BackupTab({
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 20 }}>
+      <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
           <div className="card-title"><span style={{ color: "var(--accent-green)" }}>📦</span> 备份列表</div>
-          <div className="card-desc">悬停眼睛图标查看预览</div>
         </div>
         <div className="card-content">
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
             <button className="btn btn-secondary btn-sm" onClick={handleClearBackups} disabled={!backups.length || working}>
               清除所有备份
             </button>
@@ -516,7 +487,7 @@ export function BackupTab({
             </div>
           </div>
           {backups.length > 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {backups.map(entry => {
                 const isRenaming = renamingEntry === entry.name;
                 const displayName = entry.name.replace(/\.toml$/, "");
@@ -529,11 +500,11 @@ export function BackupTab({
                       justifyContent: "space-between",
                       alignItems: "center",
                       border: "1px solid var(--border-color)",
-                      borderRadius: 8,
-                      padding: "10px 12px 10px 16px"
+                      borderRadius: 6,
+                      padding: "8px 10px"
                     }}
                   >
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         {isRenaming ? (
                           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -573,14 +544,14 @@ export function BackupTab({
                       </div>
                       {!isRenaming && (
                         <>
-                          <div style={{ fontSize:12, color: "var(--text-secondary)" }}>
+                          <div style={{ fontSize:11, color: "var(--text-secondary)" }}>
                             更新时间: {formatTime(entry.modified)} · 大小: {formatSize(entry.size)}
                           </div>
                         </>
                       )}
                     </div>
                     {!isRenaming && (
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                         <div
                           onMouseEnter={() => handleMouseEnterPreview(entry.path)}
                           onMouseLeave={handleMouseLeavePreview}
@@ -620,7 +591,7 @@ export function BackupTab({
               })}
             </div>
           ) : (
-            <div style={{ textAlign: "center", color: "var(--text-secondary)", fontStyle: "italic" }}>
+            <div style={{ padding: "8px", textAlign: "center", color: "var(--text-secondary)", fontSize: 12 }}>
               {loadingBackups ? "加载中..." : "暂无备份"}
             </div>
           )}

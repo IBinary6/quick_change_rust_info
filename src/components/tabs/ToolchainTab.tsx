@@ -69,10 +69,9 @@ export function ToolchainTab({ config, setConfig, showToast }: Props) {
 
   return (
     <>
-      <div className="card" style={{ marginBottom: 20 }}>
+      <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
-          <div className="card-title"><span style={{ color: "var(--accent-cyan)" }}>🔧</span> 交叉编译构建设置</div>
-          <div className="card-desc">配置默认编译目标和并行任务</div>
+          <div className="card-title"><span style={{ color: "var(--accent-cyan)" }}>🔧</span> 交叉编译设置</div>
         </div>
         <div className="card-content">
           <div className="form-row">
@@ -115,8 +114,7 @@ export function ToolchainTab({ config, setConfig, showToast }: Props) {
 
       <div className="card">
         <div className="card-header">
-          <div className="card-title"><span style={{ color: "var(--accent-green)" }}>⚡</span> 编译缓存</div>
-          <div className="card-desc">使用 sccache 加速重复编译</div>
+          <div className="card-title"><span style={{ color: "var(--accent-green)" }}>⚡</span> 编译缓存 (sccache)</div>
         </div>
         <div className="card-content">
           <div className="form-row">

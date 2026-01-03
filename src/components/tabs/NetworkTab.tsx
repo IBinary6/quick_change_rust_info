@@ -106,7 +106,7 @@ export function NetworkTab({ config, setConfig, showToast }: Props) {
 
   return (
      <>
-      <div className="card" style={{ marginBottom: 20 }}>
+      <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
           <div className="card-title"><span style={{ color: "var(--accent-blue)" }}>🌐</span> 基础设置</div>
         </div>
@@ -122,7 +122,7 @@ export function NetworkTab({ config, setConfig, showToast }: Props) {
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 20 }}>
+      <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
           <div className="card-title"><span style={{ color: "var(--accent-cyan)" }}>🔗</span> HTTP 代理</div>
         </div>

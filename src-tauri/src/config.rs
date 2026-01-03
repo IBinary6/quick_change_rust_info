@@ -105,6 +105,8 @@ pub struct ProfileConfig {
     pub debug: Option<toml::Value>,
     pub strip: Option<toml::Value>,
     pub panic: Option<String>,
+    #[serde(rename = "trim-paths")]
+    pub trim_paths: Option<String>,
     #[serde(flatten)]
     pub other: HashMap<String, toml::Value>,
 }
