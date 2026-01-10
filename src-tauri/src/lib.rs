@@ -468,6 +468,11 @@ async fn clean_cargo_cache(target: String) -> Result<(), String> {
     .map_err(|e| e.to_string())?
 }
 
+#[tauri::command]
+fn exit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -501,7 +506,8 @@ pub fn run() {
             get_installed_targets,
             install_target,
             get_cargo_cache_stats,
-            clean_cargo_cache
+            clean_cargo_cache,
+            exit_app
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
