@@ -29,3 +29,5 @@ AGENTS.md
 .shared/
 .spec-workflow/
 contexts/
+/.codex/plan/*.md
+/.codex/prompts/speckit.analyze.md

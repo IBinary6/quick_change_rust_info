@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { confirm } from "@tauri-apps/plugin-dialog";
-import { CargoConfig } from "./types";
+import { AdminStatus, CargoConfig } from "./types";
 import { MIRRORS } from "@/lib/mirrors";
 import { store } from "@/lib/store";
 import { cleanEmptyValues } from "@/lib/config";
@@ -15,6 +16,7 @@ import { NetworkTab } from "@/components/tabs/NetworkTab";
 import { EnvTab } from "@/components/tabs/EnvTab";
 import { BackupTab } from "@/components/tabs/BackupTab";
 import { AliasTab } from "@/components/tabs/AliasTab";
+import { GlassOverlay } from "@/components/GlassOverlay";
 
 type TabType = "registry" | "build" | "tools" | "linker" | "network" | "env" | "backup" | "alias";
 
@@ -26,6 +28,8 @@ function App() {
   const [configPath, setConfigPath] = useState("");
   const [defaultConfigPath, setDefaultConfigPath] = useState("");
   const [currentTarget, setCurrentTarget] = useState("");
+  const [adminStatus, setAdminStatus] = useState<AdminStatus | null>(null);
+  const [adminLoading, setAdminLoading] = useState(false);
   
   // Toast
   const [toast, setToast] = useState<{ show: boolean; title: string; message: string; type: "success" | "error" }>({
@@ -37,6 +41,7 @@ function App() {
 
   // Registry state
   const [selectedMirror, setSelectedMirror] = useState("official");
+  const [customCratesSource, setCustomCratesSource] = useState<{ replaceWith: string; registry?: string } | null>(null);
   
   // Build profile state
   const [profileType, setProfileType] = useState<"release" | "dev">("release");
@@ -48,9 +53,20 @@ function App() {
   };
 
   const normalizePath = (value: string) => value.replace(/\\/g, "/");
+  const getConfigFolderFromPath = (path: string) => {
+    const normalized = normalizePath(path).trim();
+    if (!normalized) return "";
+    const lower = normalized.toLowerCase();
+    if (lower.endsWith(".toml")) {
+      const slash = normalized.lastIndexOf("/");
+      return slash >= 0 ? normalized.slice(0, slash) : normalized;
+    }
+    return normalized.replace(/\/$/, "");
+  };
 
   useEffect(() => {
     const init = async () => {
+      await loadAdminStatus();
       const resolvedPath = await loadConfigPath();
       await loadConfig(resolvedPath);
       await loadCurrentTarget();
@@ -67,10 +83,20 @@ function App() {
     const replaceWith = config.source?.["crates-io"]?.["replace-with"];
     if (!replaceWith) {
       setSelectedMirror("official");
+      setCustomCratesSource(null);
       return;
     }
     const mirror = MIRRORS.find(m => m.replaceWith === replaceWith);
-    setSelectedMirror(mirror ? mirror.id : "official");
+    if (mirror) {
+      setSelectedMirror(mirror.id);
+      setCustomCratesSource(null);
+    } else {
+      setSelectedMirror("custom");
+      setCustomCratesSource({
+        replaceWith,
+        registry: config.source?.[replaceWith]?.registry
+      });
+    }
   }, [config]);
 
   async function loadConfigPath() {
@@ -123,6 +149,25 @@ function App() {
     }
   }
 
+  async function loadAdminStatus() {
+    setAdminLoading(true);
+    try {
+      const status = await invoke<AdminStatus>("get_admin_status");
+      setAdminStatus(status);
+    } catch (e) {
+      console.error(e);
+      setAdminStatus({
+        is_admin: false,
+        hint: "无法检测管理员权限，请以管理员权限启动。"
+      });
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
+  const adminBlocked = !!adminStatus && !adminStatus.is_admin;
+  const adminHint = adminStatus?.hint || "";
+
   async function loadConfig(pathOverride?: string) {
     setLoading(true);
     try {
@@ -172,12 +217,23 @@ function App() {
 
   const buildConfigForExport = () => {
     let newSource = { ...config.source };
+    const managedMirrorKeys = MIRRORS.filter(m => m.id !== "official").map(m => m.replaceWith);
     const mirror = MIRRORS.find(m => m.id === selectedMirror);
     if (mirror && mirror.id !== "official") {
       newSource["crates-io"] = { "replace-with": mirror.replaceWith };
       newSource[mirror.replaceWith] = { registry: mirror.registry };
+      for (const key of managedMirrorKeys) {
+        if (key !== mirror.replaceWith) {
+          delete newSource[key];
+        }
+      }
+    } else if (selectedMirror === "custom") {
+      // 保持用户自定义 source 不变
     } else {
       delete newSource["crates-io"];
+      for (const key of managedMirrorKeys) {
+        delete newSource[key];
+      }
     }
     return cleanEmptyValues({ ...config, source: newSource }) || {};
   };
@@ -185,7 +241,8 @@ function App() {
   async function openConfigFolder() {
     try {
       const resolvedPath = configPath || defaultConfigPath;
-      await invoke("open_config_folder", { path: resolvedPath || undefined });
+      const folder = getConfigFolderFromPath(resolvedPath);
+      await invoke("open_folder", { path: folder || resolvedPath || undefined });
     } catch (e) {
       showToast("打开失败: " + e, "error");
     }
@@ -278,6 +335,11 @@ function App() {
               {activeTab === "network" && "网络设置"}
               {activeTab === "backup" && "备份与恢复"}
             </h2>
+            {adminStatus && (
+              <div style={{ marginTop: 6, fontSize: 11, color: adminStatus.is_admin ? "var(--accent-green)" : "var(--error-color)" }}>
+                {adminStatus.is_admin ? "管理员模式" : "未授权（必须管理员运行）"}
+              </div>
+            )}
           </div>
           <div style={{ display: "flex", gap: 12 }}>
             <button className="btn btn-secondary" onClick={() => loadConfig()} disabled={loading}>
@@ -291,13 +353,51 @@ function App() {
 
         {/* 内容区 */}
         <main style={{ flex: 1, overflow: "auto", padding: 24 }}>
+          {adminStatus && !adminStatus.is_admin && (
+            <div
+              className="card"
+              style={{
+                marginBottom: 16,
+                border: "1px solid rgba(239, 68, 68, 0.4)",
+                background: "rgba(239, 68, 68, 0.06)"
+              }}
+            >
+              <div className="card-header">
+                <div className="card-title"><span style={{ color: "var(--error-color)" }}>⚠️</span> 需要管理员权限</div>
+                <div className="card-desc">本应用必须以管理员权限启动</div>
+              </div>
+              <div className="card-content" style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                <div style={{ marginBottom: 6 }}>
+                  请以管理员权限启动，否则无法继续使用。
+                </div>
+                {adminHint && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span>手动方式：</span>
+                    <span style={{ color: "var(--text-primary)" }}>{adminHint}</span>
+                  </div>
+                )}
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button className="btn btn-secondary btn-sm" onClick={() => void getCurrentWindow().close()}>
+                      退出
+                    </button>
+                    <button className="btn btn-secondary btn-sm" onClick={loadAdminStatus} disabled={adminLoading}>
+                      {adminLoading ? "检测中..." : "重新检测"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           {activeTab === "registry" && (
             <RegistryTab 
               config={config} 
               setConfig={setConfig} 
               selectedMirror={selectedMirror} 
               setSelectedMirror={setSelectedMirror}
+              customCratesSource={customCratesSource}
               showToast={showToast}
+              adminStatus={adminStatus}
             />
           )}
 
@@ -363,10 +463,31 @@ function App() {
         </main>
       </div>
       
+      <GlassOverlay active={adminBlocked} fullscreen>
+        <div className="glass-panel stack">
+          <div className="glass-title">需要管理员权限</div>
+          <div className="glass-desc">
+            本应用必须以管理员权限启动，拒绝将无法继续使用。
+          </div>
+          {adminHint && (
+            <div className="glass-hint">手动方式：{adminHint}</div>
+          )}
+          <div className="glass-actions">
+            <button className="btn btn-secondary" onClick={() => void getCurrentWindow().close()}>
+              退出
+            </button>
+          </div>
+        </div>
+      </GlassOverlay>
+
       <style>{`
         @keyframes slideIn {
           from { transform: translateX(100px); opacity: 0; }
           to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes glassSpin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
         }
         .toast {
           position: fixed;
@@ -409,6 +530,77 @@ function App() {
           font-size: 12px;
           color: var(--text-secondary);
           line-height: 1.4;
+        }
+        .glass-overlay {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: rgba(10, 16, 22, 0.42);
+          backdrop-filter: blur(14px) saturate(130%);
+          border-radius: 14px;
+          z-index: 20;
+        }
+        .glass-overlay.fullscreen {
+          position: fixed;
+          border-radius: 0;
+          z-index: 2000;
+        }
+        .glass-overlay.loading {
+          z-index: 2100;
+        }
+        .glass-panel {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          padding: 16px 18px;
+          border-radius: 14px;
+          background: rgba(20, 28, 36, 0.72);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          box-shadow: 0 18px 45px rgba(0, 0, 0, 0.35);
+          color: var(--text-primary);
+        }
+        .glass-panel.stack {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 10px;
+          min-width: 320px;
+          max-width: 420px;
+        }
+        .glass-title {
+          font-size: 14px;
+          font-weight: 600;
+        }
+        .glass-desc {
+          font-size: 12px;
+          color: var(--text-secondary);
+          line-height: 1.4;
+        }
+        .glass-hint {
+          font-size: 11px;
+          color: var(--text-secondary);
+          word-break: break-all;
+        }
+        .glass-actions {
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .glass-spinner {
+          width: 34px;
+          height: 34px;
+          border-radius: 50%;
+          background: conic-gradient(from 0deg, rgba(255,255,255,0.15), var(--accent-cyan), rgba(255,255,255,0.15));
+          position: relative;
+          animation: glassSpin 1.1s linear infinite;
+        }
+        .glass-spinner::after {
+          content: "";
+          position: absolute;
+          inset: 6px;
+          border-radius: 50%;
+          background: rgba(20, 28, 36, 0.85);
         }
         code { font-family: 'Consolas', 'Monaco', monospace; }
         textarea.input { padding: 10px 14px; line-height: 1.5; }

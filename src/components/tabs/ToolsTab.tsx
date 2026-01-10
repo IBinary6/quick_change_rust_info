@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { CargoConfig, TARGET_PLATFORMS, WRAPPER_OPTIONS } from "@/types";
+import { GlassOverlay } from "@/components/GlassOverlay";
 
 interface Props {
   config: CargoConfig;
@@ -123,10 +124,14 @@ export function ToolsTab({ config, setConfig, showToast }: Props) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
 
+  const cacheBusy = loadingCache || cleaning;
+  const targetBusy = !!installingTarget;
+  const sccacheBusy = installingSccache;
+
   return (
     <>
       {/* 缓存清理工具 */}
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card" style={{ marginBottom: 16, position: "relative", overflow: "hidden" }}>
         <div className="card-header">
           <div className="card-title"><span style={{ color: "var(--accent-cyan)" }}>🧹</span> 缓存清理工具</div>
         </div>
@@ -174,12 +179,21 @@ export function ToolsTab({ config, setConfig, showToast }: Props) {
                </div>
              </div>
            )}
+           <GlassOverlay active={cacheBusy}>
+             <div className="glass-panel">
+               <div className="glass-spinner" />
+               <div>
+                 <div className="glass-title">{cleaning ? "正在清理缓存" : "正在分析缓存"}</div>
+                 <div className="glass-desc">请稍候…</div>
+               </div>
+             </div>
+           </GlassOverlay>
         </div>
       </div>
       
       {/* Rustup Mirror Card Removed (Moved to RegistryTab) */}
 
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card" style={{ marginBottom: 16, position: "relative", overflow: "hidden" }}>
         <div className="card-header">
           <div className="card-title"><span style={{ color: "var(--accent-cyan)" }}>🔧</span> 交叉编译设置</div>
         </div>
@@ -220,9 +234,18 @@ export function ToolsTab({ config, setConfig, showToast }: Props) {
               onChange={(e) => updateBuild("jobs", e.target.value ? parseInt(e.target.value) : undefined)} />
           </div>
         </div>
+        <GlassOverlay active={targetBusy}>
+          <div className="glass-panel">
+            <div className="glass-spinner" />
+            <div>
+              <div className="glass-title">正在安装 Target</div>
+              <div className="glass-desc">{installingTarget || "请稍候…"}</div>
+            </div>
+          </div>
+        </GlassOverlay>
       </div>
 
-      <div className="card">
+      <div className="card" style={{ position: "relative", overflow: "hidden" }}>
         <div className="card-header">
           <div className="card-title"><span style={{ color: "var(--accent-green)" }}>⚡</span> 编译缓存 (sccache)</div>
         </div>
@@ -253,6 +276,15 @@ export function ToolsTab({ config, setConfig, showToast }: Props) {
             )}
           </div>
         </div>
+        <GlassOverlay active={sccacheBusy}>
+          <div className="glass-panel">
+            <div className="glass-spinner" />
+            <div>
+              <div className="glass-title">正在安装 sccache</div>
+              <div className="glass-desc">请稍候…</div>
+            </div>
+          </div>
+        </GlassOverlay>
       </div>
     </>
   );

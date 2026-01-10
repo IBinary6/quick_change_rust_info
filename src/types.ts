@@ -85,6 +85,38 @@ export interface CargoConfig {
     [key: string]: any;
 }
 
+export interface RustupEnvScopeStatus {
+    value?: string;
+    source?: string;
+    error?: string;
+}
+
+export interface RustupEnvVarStatus {
+    user: RustupEnvScopeStatus;
+    system: RustupEnvScopeStatus;
+}
+
+export interface RustupEnvStatus {
+    dist: RustupEnvVarStatus;
+    root: RustupEnvVarStatus;
+}
+
+export interface RustupEnvWriteOutcome {
+    ok: boolean;
+    error?: string;
+    skipped?: boolean;
+}
+
+export interface RustupEnvWriteResult {
+    user: RustupEnvWriteOutcome;
+    system: RustupEnvWriteOutcome;
+}
+
+export interface AdminStatus {
+    is_admin: boolean;
+    hint: string;
+}
+
 export interface BackupEntry {
     name: string;
     path: string;

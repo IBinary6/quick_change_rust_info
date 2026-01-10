@@ -4,6 +4,7 @@ import { confirm, open, save } from "@tauri-apps/plugin-dialog";
 import { BackupEntry, CargoConfig } from "@/types";
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { GlassOverlay } from "@/components/GlassOverlay";
 
 
 interface Props {
@@ -42,6 +43,9 @@ export function BackupTab({
   
   // 预览缓存：path -> toml字符串
   const [previewCache, setPreviewCache] = useState<Map<string, string>>(new Map());
+  const previewCacheRef = useRef<Map<string, string>>(new Map());
+  const preloadTokenRef = useRef(0);
+  const previewLoadingRef = useRef<Set<string>>(new Set());
   
   // 重命名状态
   const [renamingEntry, setRenamingEntry] = useState<string | null>(null);
@@ -54,24 +58,40 @@ export function BackupTab({
     refreshBackups();
   }, [configPath]);
 
-  // 预加载所有备份的配置内容
-  async function preloadBackupPreviews(backupList: BackupEntry[]) {
-    console.log("[Preview Cache] Preloading", backupList.length, "backups...");
-    const newCache = new Map<string, string>();
-    
-    for (const entry of backupList) {
-      try {
-        const cfg = await invoke<CargoConfig>("import_config", { path: entry.path });
-        const text = await invoke<string>("preview_config", { config: cfg });
-        newCache.set(entry.path, text);
-      } catch (e) {
-        console.error("[Preview Cache] Failed to load", entry.name, e);
-        newCache.set(entry.path, "// 加载失败\n" + e);
+  useEffect(() => {
+    previewCacheRef.current = previewCache;
+  }, [previewCache]);
+
+  useEffect(() => {
+    return () => {
+      preloadTokenRef.current += 1;
+      if (autoCloseTimerRef.current) {
+        clearTimeout(autoCloseTimerRef.current);
+        autoCloseTimerRef.current = null;
       }
+    };
+  }, []);
+
+  // 预取部分备份的配置内容
+  async function preloadBackupPreviews(backupList: BackupEntry[]) {
+    const token = ++preloadTokenRef.current;
+    const targets = backupList.slice(0, 3);
+    for (const entry of targets) {
+      if (token !== preloadTokenRef.current) return;
+      if (previewCacheRef.current.has(entry.path)) continue;
+      if (previewLoadingRef.current.has(entry.path)) continue;
+      previewLoadingRef.current.add(entry.path);
+      try {
+        const text = await invoke<string>("preview_config_path", { path: entry.path });
+        if (token !== preloadTokenRef.current) return;
+        setPreviewCache(prev => new Map(prev).set(entry.path, text));
+      } catch (e) {
+        setPreviewCache(prev => new Map(prev).set(entry.path, "// 加载失败\n" + e));
+      } finally {
+        previewLoadingRef.current.delete(entry.path);
+      }
+      await new Promise(resolve => setTimeout(resolve, 80));
     }
-    
-    setPreviewCache(newCache);
-    console.log("[Preview Cache] Preloaded", newCache.size, "configs");
   }
 
   async function loadBackupDir() {
@@ -88,8 +108,18 @@ export function BackupTab({
     try {
       const items = await invoke<BackupEntry[]>("list_backups", { path: configPath || undefined });
       setBackups(items);
-      // 预加载所有备份的配置内容
-      await preloadBackupPreviews(items);
+      setPreviewCache(prev => {
+        const keep = new Set(items.map(item => item.path));
+        const next = new Map<string, string>();
+        for (const [key, value] of prev) {
+          if (keep.has(key)) {
+            next.set(key, value);
+          }
+        }
+        return next;
+      });
+      // 预取部分备份预览，避免阻塞 UI
+      preloadBackupPreviews(items);
     } catch (e) {
       showToast("读取备份失败: " + e, "error");
     } finally {
@@ -218,11 +248,17 @@ export function BackupTab({
         directory: false
       });
       if (typeof selected === "string" && selected) {
-        const imported = await invoke<CargoConfig>("import_config", { path: selected });
-        setConfig(imported);
-        showToast("配置已导入，请保存后写入磁盘", "success");
+        setWorking(true);
+        try {
+          const imported = await invoke<CargoConfig>("import_config", { path: selected });
+          setConfig(imported);
+          showToast("配置已导入，请保存后写入磁盘", "success");
+        } finally {
+          setWorking(false);
+        }
       }
     } catch (e) {
+      setWorking(false);
       showToast("导入失败: " + e, "error");
     }
   }
@@ -239,10 +275,16 @@ export function BackupTab({
         filters: [{ name: "TOML", extensions: ["toml"] }]
       });
       if (typeof path === "string" && path) {
-        await invoke("export_config", { path, config: buildExportConfig() });
-        showToast("配置已导出", "success");
+        setWorking(true);
+        try {
+          await invoke("export_config", { path, config: buildExportConfig() });
+          showToast("配置已导出", "success");
+        } finally {
+          setWorking(false);
+        }
       }
     } catch (e) {
+      setWorking(false);
       showToast("导出失败: " + e, "error");
     }
   }
@@ -282,7 +324,14 @@ export function BackupTab({
 
   async function handleOpenConfigFolder() {
     try {
-      await invoke("open_config_folder", { path: configPath || undefined });
+      const normalized = (configPath || "").replace(/\\/g, "/").trim();
+      const lower = normalized.toLowerCase();
+      const folder = normalized
+        ? lower.endsWith(".toml")
+          ? normalized.slice(0, Math.max(0, normalized.lastIndexOf("/")))
+          : normalized.replace(/\/$/, "")
+        : "";
+      await invoke("open_folder", { path: folder || normalized || undefined });
     } catch (e) {
       showToast("打开目录失败: " + e, "error");
     }
@@ -314,8 +363,6 @@ export function BackupTab({
   }
 
   async function handleMouseEnterPreview(path: string) {
-    console.log("[Preview] Mouse enter, path:", path);
-    
     // 清除之前的自动关闭定时器
     if (autoCloseTimerRef.current) {
       clearTimeout(autoCloseTimerRef.current);
@@ -325,16 +372,14 @@ export function BackupTab({
     hoveringRef.current = path;
     
     // 优先从缓存读取
-    const cached = previewCache.get(path);
+    const cached = previewCacheRef.current.get(path);
     if (cached) {
-      console.log("[Preview] Using cached preview");
       setHoverPreview(cached);
       setHoverLoading(false);
       
       // 5秒后自动关闭
       autoCloseTimerRef.current = setTimeout(() => {
         if (!isPreviewPanelHovered) {
-          console.log("[Preview] Auto-closing preview");
           setHoverPreview(null);
           hoveringRef.current = null;
         }
@@ -345,32 +390,33 @@ export function BackupTab({
     // 缓存未命中，加载数据
     setHoverLoading(true);
     setHoverPreview(null);
-    console.log("[Preview] Cache miss, loading...");
     
     try {
-       const cfg = await invoke<CargoConfig>("import_config", { path });
-       const text = await invoke<string>("preview_config", { config: cfg });
-       console.log("[Preview] Preview loaded, length:", text?.length);
+       const text = await invoke<string>("preview_config_path", { path });
        
        // 更新缓存
        setPreviewCache(prev => new Map(prev).set(path, text));
-       
+       if (hoveringRef.current !== path) {
+         setHoverLoading(false);
+         return;
+       }
        setHoverPreview(text);
        setHoverLoading(false);
-       console.log("[Preview] Preview set, will auto-close in 5s");
        
        // 5秒后自动关闭
        autoCloseTimerRef.current = setTimeout(() => {
          if (!isPreviewPanelHovered) {
-           console.log("[Preview] Auto-closing preview");
            setHoverPreview(null);
            hoveringRef.current = null;
         }
        }, 5000);
        
     } catch (e) {
-       console.error("[Preview] Error:", e);
        const errorMsg = "// 读取失败或文件损坏\n" + e;
+       if (hoveringRef.current !== path) {
+         setHoverLoading(false);
+         return;
+       }
        setHoverPreview(errorMsg);
        setHoverLoading(false);
        // 缓存错误信息
@@ -379,7 +425,6 @@ export function BackupTab({
   }
 
   function handleMouseLeavePreview() {
-     console.log("[Preview] Eye icon mouse leave (ignored)");
      // 不立即清除，让预览继续显示
   }
 
@@ -396,9 +441,20 @@ export function BackupTab({
     return `${(kb / 1024).toFixed(1)} MB`;
   };
 
+  const listBusy = loadingBackups && !working;
+
   return (
-    <>
-      <div className="card" style={{ marginBottom: 16 }}>
+    <div style={{ position: "relative", minHeight: "100%" }}>
+      <GlassOverlay active={working}>
+        <div className="glass-panel">
+          <div className="glass-spinner" />
+          <div>
+            <div className="glass-title">正在处理备份</div>
+            <div className="glass-desc">请稍候…</div>
+          </div>
+        </div>
+      </GlassOverlay>
+      <div className="card" style={{ marginBottom: 16, position: "relative", overflow: "hidden" }}>
         <div className="card-header">
           <div className="card-title"><span style={{ color: "var(--accent-cyan)" }}>⚙️</span> 配置位置</div>
         </div>
@@ -595,6 +651,15 @@ export function BackupTab({
               {loadingBackups ? "加载中..." : "暂无备份"}
             </div>
           )}
+          <GlassOverlay active={listBusy}>
+            <div className="glass-panel">
+              <div className="glass-spinner" />
+              <div>
+                <div className="glass-title">正在加载备份</div>
+                <div className="glass-desc">请稍候…</div>
+              </div>
+            </div>
+          </GlassOverlay>
         </div>
       </div>
 
@@ -627,18 +692,9 @@ export function BackupTab({
 
 
       {/* Floating Preview Panel */}
-      {(() => {
-        const shouldShow = hoverPreview !== null || hoverLoading;
-        console.log("[Preview Panel] Render check:", { 
-          hoverPreview: hoverPreview?.substring(0, 50), 
-          hoverLoading, 
-          shouldShow 
-        });
-        return shouldShow;
-      })() && (
+      {(hoverPreview !== null || hoverLoading) && (
         <div
           onMouseEnter={() => {
-            console.log("[Preview] Panel mouse enter");
             setIsPreviewPanelHovered(true);
             if (autoCloseTimerRef.current) {
               clearTimeout(autoCloseTimerRef.current);
@@ -646,7 +702,6 @@ export function BackupTab({
             }
           }}
           onMouseLeave={() => {
-            console.log("[Preview] Panel mouse leave - closing");
             setIsPreviewPanelHovered(false);
             setHoverPreview(null);
             hoveringRef.current = null;
@@ -712,6 +767,6 @@ export function BackupTab({
         </div>
       )}
 
-    </>
+    </div>
   );
 }
