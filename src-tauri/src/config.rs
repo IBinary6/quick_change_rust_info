@@ -395,12 +395,33 @@ fn atomic_write(path: &Path, content: &str) -> Result<(), String> {
     }
 }
 
+fn ensure_config_file(path: &Path) -> Result<(), String> {
+    if path.exists() {
+        if path.is_file() {
+            return Ok(());
+        }
+        return Err("配置路径不是文件".to_string());
+    }
+
+    if let Some(parent) = path.parent() {
+        if !parent.exists() {
+            fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
+        }
+    }
+
+    fs::write(path, "").map_err(|e| format!("Failed to create config file: {}", e))
+}
+
 pub fn load_config(path_override: Option<&str>) -> Result<CargoConfig, String> {
     let path = resolve_config_path(path_override);
     if !path.exists() {
+        ensure_config_file(&path)?;
         return Ok(CargoConfig::default());
     }
     let content = fs::read_to_string(&path).map_err(|e| format!("Failed to read config: {}", e))?;
+    if content.trim().is_empty() {
+        return Ok(CargoConfig::default());
+    }
     toml::from_str(&content).map_err(|e| format!("Failed to parse config: {}", e))
 }
 

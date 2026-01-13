@@ -1,10 +1,11 @@
 import { useEffect, useState, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { confirm, open, save } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { BackupEntry, CargoConfig } from "@/types";
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { GlassOverlay } from "@/components/GlassOverlay";
+import { ConfirmAction } from "@/lib/confirm";
 
 
 interface Props {
@@ -16,6 +17,7 @@ interface Props {
   defaultConfigPath: string;
   updateConfigPath: (path: string, shouldReload?: boolean) => Promise<void>;
   resetConfigPath: () => Promise<void>;
+  confirmAction: ConfirmAction;
 }
 
 export function BackupTab({
@@ -26,7 +28,8 @@ export function BackupTab({
   configPath,
   defaultConfigPath,
   updateConfigPath,
-  resetConfigPath
+  resetConfigPath,
+  confirmAction
 }: Props) {
   const [backups, setBackups] = useState<BackupEntry[]>([]);
   const [backupDir, setBackupDir] = useState("");
@@ -143,9 +146,12 @@ export function BackupTab({
   }
 
   async function handleClearBackups() {
-    const confirmed = await confirm("确定要删除所有备份文件吗？此操作不可恢复。", {
+    const confirmed = await confirmAction({
       title: "清除备份",
-      kind: "warning"
+      message: "确定要删除所有备份文件吗？此操作不可恢复。",
+      okLabel: "确认删除",
+      cancelLabel: "取消",
+      tone: "danger"
     });
     if (!confirmed) return;
     setWorking(true);
@@ -161,9 +167,12 @@ export function BackupTab({
   }
 
   async function handleRestore(entry: BackupEntry) {
-    const confirmed = await confirm("将使用该备份覆盖当前配置，是否继续？", {
+    const confirmed = await confirmAction({
       title: "恢复备份",
-      kind: "warning"
+      message: "将使用该备份覆盖当前配置，是否继续？",
+      okLabel: "确认恢复",
+      cancelLabel: "取消",
+      tone: "warning"
     });
     if (!confirmed) return;
     setWorking(true);
@@ -179,9 +188,12 @@ export function BackupTab({
   }
 
   async function handleDeleteBackup(entry: BackupEntry) {
-    const confirmed = await confirm(`确定要删除备份 "${entry.name}" 吗？此操作不可恢复。`, {
+    const confirmed = await confirmAction({
       title: "删除备份",
-      kind: "warning"
+      message: `确定要删除备份 "${entry.name}" 吗？此操作不可恢复。`,
+      okLabel: "确认删除",
+      cancelLabel: "取消",
+      tone: "danger"
     });
     if (!confirmed) return;
     setWorking(true);

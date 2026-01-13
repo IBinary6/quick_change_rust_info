@@ -1,10 +1,10 @@
 
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { confirm } from "@tauri-apps/plugin-dialog";
 import { AdminStatus, CargoConfig, RegistryEntry, RustupEnvStatus, RustupEnvWriteResult } from "@/types";
 import { MIRRORS } from "@/lib/mirrors";
 import { GlassOverlay } from "@/components/GlassOverlay";
+import { ConfirmAction } from "@/lib/confirm";
 
 interface Props {
   config: CargoConfig;
@@ -14,6 +14,7 @@ interface Props {
   customCratesSource: { replaceWith: string; registry?: string } | null;
   showToast?: (msg: string, type: "success" | "error") => void;
   adminStatus?: AdminStatus | null;
+  confirmAction: ConfirmAction;
 }
 
 const RUSTUP_MIRRORS = [
@@ -31,7 +32,8 @@ export function RegistryTab({
   setSelectedMirror,
   customCratesSource,
   showToast,
-  adminStatus
+  adminStatus,
+  confirmAction
 }: Props) {
   const registries = config.registries || {};
   const [newKey, setNewKey] = useState("");
@@ -175,14 +177,13 @@ export function RegistryTab({
     const confirmMessage = isAdmin
       ? `即将修改 Rustup 镜像为 ${mirror.name}。\n将同时写入用户级与系统级环境变量。\n是否继续？`
       : `当前为普通权限，仅写入用户级环境变量。\n系统级修改需要管理员权限。\n是否继续？`;
-    const confirmed = await confirm(
-      confirmMessage,
-      {
-        title: "修改 Rustup 镜像",
-        okLabel: "确认修改",
-        cancelLabel: "取消"
-      }
-    );
+    const confirmed = await confirmAction({
+      title: "修改 Rustup 镜像",
+      message: confirmMessage,
+      okLabel: "确认修改",
+      cancelLabel: "取消",
+      tone: "warning"
+    });
     if (!confirmed) return;
 
     await applyRustupEnv(dist, root, `已应用 ${mirror.name}`);
@@ -200,14 +201,13 @@ export function RegistryTab({
     const desc = toUser
       ? "即将使用系统级配置覆盖用户级配置。"
       : "即将使用用户级配置覆盖系统级配置。";
-    const confirmed = await confirm(
-      `${desc}\n当前用户级: ${distUser || "-"} / ${rootUser || "-"}\n当前系统级: ${distSystem || "-"} / ${rootSystem || "-"}`,
-      {
-        title,
-        okLabel: "确认统一",
-        cancelLabel: "取消"
-      }
-    );
+    const confirmed = await confirmAction({
+      title,
+      message: `${desc}\n当前用户级: ${distUser || "-"} / ${rootUser || "-"}\n当前系统级: ${distSystem || "-"} / ${rootSystem || "-"}`,
+      okLabel: "确认统一",
+      cancelLabel: "取消",
+      tone: "warning"
+    });
     if (!confirmed) return;
     await applyRustupEnv(dist, root, "已统一 Rustup 配置");
   };
@@ -218,14 +218,13 @@ export function RegistryTab({
       if (showToast) showToast("需要管理员权限才能写入系统级环境变量", "error");
       return;
     }
-    const confirmed = await confirm(
-      "将重试写入系统级环境变量（需要管理员权限）。是否继续？",
-      {
-        title: "系统级重试",
-        okLabel: "继续",
-        cancelLabel: "取消"
-      }
-    );
+    const confirmed = await confirmAction({
+      title: "系统级重试",
+      message: "将重试写入系统级环境变量（需要管理员权限）。是否继续？",
+      okLabel: "继续",
+      cancelLabel: "取消",
+      tone: "warning"
+    });
     if (!confirmed) return;
     setRustupWriting(true);
     try {

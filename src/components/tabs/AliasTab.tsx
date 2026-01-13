@@ -47,6 +47,25 @@ export function AliasTab({ config, setConfig }: Props) {
         <div className="card-desc">配置 `cargo` 命令别名，例如 `cargo b` -&gt; `cargo build`</div>
       </div>
       <div className="card-content">
+        <div
+          style={{
+            marginBottom: 16,
+            padding: "10px 12px",
+            border: "1px dashed var(--border-color)",
+            borderRadius: 8,
+            background: "var(--bg-tertiary)",
+            fontSize: 12,
+            color: "var(--text-secondary)"
+          }}
+        >
+          <div style={{ fontWeight: 600, marginBottom: 6, color: "var(--text-primary)" }}>用户使用手册</div>
+          <div style={{ lineHeight: 1.6 }}>
+            <div>1. 保存配置后即可在终端使用：<code>cargo &lt;别名&gt; [参数]</code></div>
+            <div>2. 例：<code>b = "build"</code>，使用 <code>cargo b</code></div>
+            <div>3. 例：<code>rr = "run --release"</code>，使用 <code>cargo rr -- &lt;程序参数&gt;</code></div>
+            <div>4. 参数会自动透传：<code>cargo b -q</code> 等价于 <code>cargo build -q</code></div>
+          </div>
+        </div>
         
         {/* 现有别名列表 */}
         {Object.entries(aliases).length > 0 ? (

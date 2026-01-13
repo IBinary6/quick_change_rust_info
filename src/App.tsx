@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { confirm } from "@tauri-apps/plugin-dialog";
 import { AdminStatus, CargoConfig } from "./types";
 import { MIRRORS } from "@/lib/mirrors";
 import { store } from "@/lib/store";
 import { cleanEmptyValues } from "@/lib/config";
+import { ConfirmAction, ConfirmOptions, ConfirmTone } from "@/lib/confirm";
 
 // Tabs
 import { RegistryTab } from "@/components/tabs/RegistryTab";
@@ -19,6 +19,14 @@ import { AliasTab } from "@/components/tabs/AliasTab";
 import { GlassOverlay } from "@/components/GlassOverlay";
 
 type TabType = "registry" | "build" | "tools" | "linker" | "network" | "env" | "backup" | "alias";
+type ConfirmState = {
+  open: boolean;
+  title: string;
+  message: string;
+  okLabel: string;
+  cancelLabel: string;
+  tone: ConfirmTone;
+};
 
 function App() {
   const [config, setConfig] = useState<CargoConfig>({});
@@ -45,6 +53,19 @@ function App() {
   
   // Build profile state
   const [profileType, setProfileType] = useState<"release" | "dev">("release");
+  const [savedSnapshot, setSavedSnapshot] = useState("");
+  const [hasSnapshot, setHasSnapshot] = useState(false);
+  const [confirmState, setConfirmState] = useState<ConfirmState>({
+    open: false,
+    title: "",
+    message: "",
+    okLabel: "",
+    cancelLabel: "",
+    tone: "default"
+  });
+  const confirmResolver = useRef<((value: boolean) => void) | null>(null);
+  const dirtyRef = useRef(false);
+  const allowCloseRef = useRef(false);
 
   const showToast = (message: string, type: "success" | "error" = "success") => {
     const title = type === "success" ? "操作成功" : "操作失败";
@@ -52,7 +73,36 @@ function App() {
     setTimeout(() => setToast({ show: false, title: "", message: "", type: "success" }), 3200);
   };
 
+  const stableStringify = (value: unknown) => {
+    const seen = new WeakSet<object>();
+    const normalize = (input: any): any => {
+      if (input === null || typeof input !== "object") return input;
+      if (seen.has(input)) return "[Circular]";
+      seen.add(input);
+      if (Array.isArray(input)) return input.map(normalize);
+      const sorted: Record<string, any> = {};
+      for (const key of Object.keys(input).sort()) {
+        const next = input[key];
+        if (next !== undefined) {
+          sorted[key] = normalize(next);
+        }
+      }
+      return sorted;
+    };
+    return JSON.stringify(normalize(value));
+  };
+
+  const currentSnapshot = useMemo(() => stableStringify(config), [config]);
+  const isDirty = hasSnapshot && currentSnapshot !== savedSnapshot;
+
   const normalizePath = (value: string) => value.replace(/\\/g, "/");
+  const isWindows = navigator.userAgent.toLowerCase().includes("windows");
+  const normalizeComparePath = (value: string) => {
+    const normalized = normalizePath(value).trim();
+    return isWindows ? normalized.toLowerCase() : normalized;
+  };
+  const isSamePath = (left: string, right: string) =>
+    normalizeComparePath(left) === normalizeComparePath(right);
   const getConfigFolderFromPath = (path: string) => {
     const normalized = normalizePath(path).trim();
     if (!normalized) return "";
@@ -73,6 +123,10 @@ function App() {
     };
     init();
   }, []);
+
+  useEffect(() => {
+    dirtyRef.current = isDirty;
+  }, [isDirty]);
 
   // 持久化 activeTab
   useEffect(() => {
@@ -104,7 +158,13 @@ function App() {
       const defaultPath = normalizePath(await invoke<string>("get_config_path"));
       setDefaultConfigPath(defaultPath);
       const storedPath = store.get("configPathOverride", "");
-      const resolvedPath = storedPath ? normalizePath(storedPath) : defaultPath;
+      const normalizedStored = storedPath ? normalizePath(storedPath) : "";
+      const resolvedPath = normalizedStored && !isSamePath(normalizedStored, defaultPath)
+        ? normalizedStored
+        : defaultPath;
+      if (normalizedStored && isSamePath(normalizedStored, defaultPath)) {
+        store.set("configPathOverride", "");
+      }
       setConfigPath(resolvedPath);
       return resolvedPath;
     } catch (e) {
@@ -114,7 +174,7 @@ function App() {
   }
 
   const persistConfigPath = (path: string) => {
-    if (path && defaultConfigPath && path !== defaultConfigPath) {
+    if (path && defaultConfigPath && !isSamePath(path, defaultConfigPath)) {
       store.set("configPathOverride", path);
     } else {
       store.set("configPathOverride", "");
@@ -132,7 +192,10 @@ function App() {
 
   const resetConfigPath = async () => {
     if (!defaultConfigPath) return;
-    await updateConfigPath(defaultConfigPath);
+    const normalized = normalizePath(defaultConfigPath);
+    store.set("configPathOverride", "");
+    setConfigPath(normalized);
+    await loadConfig(normalized);
   };
 
   async function loadCurrentTarget() {
@@ -168,12 +231,87 @@ function App() {
   const adminBlocked = !!adminStatus && !adminStatus.is_admin;
   const adminHint = adminStatus?.hint || "";
 
+  const confirmAction: ConfirmAction = useCallback((options: ConfirmOptions) => {
+    return new Promise<boolean>((resolve) => {
+      if (confirmResolver.current) {
+        confirmResolver.current(false);
+      }
+      confirmResolver.current = resolve;
+      setConfirmState({
+        open: true,
+        title: options.title || "请确认",
+        message: options.message,
+        okLabel: options.okLabel || "确认",
+        cancelLabel: options.cancelLabel || "取消",
+        tone: options.tone || "default"
+      });
+    });
+  }, []);
+
+  const closeConfirm = useCallback((result: boolean) => {
+    confirmResolver.current?.(result);
+    confirmResolver.current = null;
+    setConfirmState(prev => ({ ...prev, open: false }));
+  }, []);
+
+  const forceCloseWindow = useCallback(async () => {
+    const window = getCurrentWindow();
+    let destroyed = false;
+    try {
+      await window.destroy();
+      destroyed = true;
+    } catch (e) {
+      console.error(e);
+    }
+    if (!destroyed) {
+      try {
+        await window.close();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    try {
+      await invoke("exit_app");
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    const setup = async () => {
+      const window = getCurrentWindow();
+      unlisten = await window.onCloseRequested(async (event) => {
+        if (allowCloseRef.current) return;
+        event.preventDefault();
+        if (dirtyRef.current) {
+          const confirmed = await confirmAction({
+            title: "未保存的修改",
+            message: "检测到未保存的修改。\n现在退出会丢失更改，是否仍然退出？",
+            okLabel: "仍然退出",
+            cancelLabel: "返回保存",
+            tone: "danger"
+          });
+          if (!confirmed) return;
+        }
+        allowCloseRef.current = true;
+        await forceCloseWindow();
+      });
+    };
+    setup();
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, [confirmAction, forceCloseWindow]);
+
   async function loadConfig(pathOverride?: string) {
     setLoading(true);
     try {
       const resolvedPath = pathOverride || configPath || undefined;
       const c = await invoke<CargoConfig>("get_config", resolvedPath ? { path: resolvedPath } : undefined);
       setConfig(c);
+      setSavedSnapshot(stableStringify(c));
+      setHasSnapshot(true);
       showToast("配置已加载", "success");
     } catch (e) {
       showToast("加载失败: " + e, "error");
@@ -181,6 +319,20 @@ function App() {
       setLoading(false);
     }
   }
+
+  const handleRefresh = async (force = false) => {
+    if (!force && isDirty) {
+      const confirmed = await confirmAction({
+        title: "放弃未保存修改？",
+        message: "刷新会丢失当前未保存修改，是否继续？",
+        okLabel: "放弃并刷新",
+        cancelLabel: "返回保存",
+        tone: "warning"
+      });
+      if (!confirmed) return;
+    }
+    await loadConfig();
+  };
 
   async function saveConfig() {
     setSaving(true);
@@ -190,10 +342,12 @@ function App() {
     if (resolvedPath) {
       const hasConfig = await invoke<boolean>("check_file_exists", { path: resolvedPath });
       if (hasConfig) {
-        const shouldBackup = await confirm("即将写入配置文件，建议先备份一份。是否先创建备份？", {
+        const shouldBackup = await confirmAction({
           title: "保存配置",
+          message: "即将写入配置文件，建议先备份一份。\n是否先创建备份？",
           okLabel: "先备份",
-          cancelLabel: "直接保存"
+          cancelLabel: "直接保存",
+          tone: "warning"
         });
         if (shouldBackup) {
           try {
@@ -206,7 +360,9 @@ function App() {
       }
     }
     await invoke("save_config", { config: cleanConfig, path: resolvedPath || undefined });
-      setConfig(cleanConfig);
+    setConfig(cleanConfig);
+    setSavedSnapshot(stableStringify(cleanConfig));
+    setHasSnapshot(true);
     showToast("配置已保存", "success");
     } catch (e) {
       showToast("保存失败: " + e, "error");
@@ -321,34 +477,43 @@ function App() {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {/* 顶部栏 */}
         <header style={{ 
-          display: "flex", alignItems: "center", justifyContent: "space-between",
+          display: "flex", flexDirection: "column", gap: 10,
           padding: "16px 24px", borderBottom: "1px solid var(--border-color)", background: "var(--bg-secondary)"
         }}>
-          <div>
-            <h2 style={{ fontSize: "18px", fontWeight: 600 }}>
-              {activeTab === "registry" && "源与镜像配置"}
-              {activeTab === "build" && "编译优化"}
-              {activeTab === "tools" && "常用工具 & 缓存"}
-              {activeTab === "alias" && "命令别名"}
-              {activeTab === "linker" && "链接器配置"}
-              {activeTab === "env" && "环境变量配置"}
-              {activeTab === "network" && "网络设置"}
-              {activeTab === "backup" && "备份与恢复"}
-            </h2>
-            {adminStatus && (
-              <div style={{ marginTop: 6, fontSize: 11, color: adminStatus.is_admin ? "var(--accent-green)" : "var(--error-color)" }}>
-                {adminStatus.is_admin ? "管理员模式" : "未授权（必须管理员运行）"}
-              </div>
-            )}
+          <div className="header-row">
+            <div>
+              <h2 style={{ fontSize: "18px", fontWeight: 600 }}>
+                {activeTab === "registry" && "源与镜像配置"}
+                {activeTab === "build" && "编译优化"}
+                {activeTab === "tools" && "常用工具 & 缓存"}
+                {activeTab === "alias" && "命令别名"}
+                {activeTab === "linker" && "链接器配置"}
+                {activeTab === "env" && "环境变量配置"}
+                {activeTab === "network" && "网络设置"}
+                {activeTab === "backup" && "备份与恢复"}
+              </h2>
+              {adminStatus && (
+                <div style={{ marginTop: 6, fontSize: 11, color: adminStatus.is_admin ? "var(--accent-green)" : "var(--error-color)" }}>
+                  {adminStatus.is_admin ? "管理员模式" : "未授权（必须管理员运行）"}
+                </div>
+              )}
+            </div>
+            <div className={`header-actions ${isDirty ? "header-actions-alert" : ""}`}>
+              {isDirty && <div className="dirty-badge">未保存</div>}
+              <button className="btn btn-secondary" onClick={() => handleRefresh()} disabled={loading}>
+                {loading ? "⏳" : "🔄"} 刷新
+              </button>
+              <button className={`btn btn-primary ${isDirty ? "save-attention" : ""}`} onClick={saveConfig} disabled={saving}>
+                {saving ? "⏳" : "💾"} 保存配置
+              </button>
+            </div>
           </div>
-          <div style={{ display: "flex", gap: 12 }}>
-            <button className="btn btn-secondary" onClick={() => loadConfig()} disabled={loading}>
-              {loading ? "⏳" : "🔄"} 刷新
-            </button>
-            <button className="btn btn-primary" onClick={saveConfig} disabled={saving}>
-              {saving ? "⏳" : "💾"} 保存配置
-            </button>
-          </div>
+          {isDirty && (
+            <div className="save-strip">
+              <div className="save-strip-main">检测到未保存修改，请先保存配置。</div>
+              <div className="save-strip-sub">点击右侧“保存配置”即可生效</div>
+            </div>
+          )}
         </header>
 
         {/* 内容区 */}
@@ -378,7 +543,7 @@ function App() {
                 )}
                 <div style={{ marginTop: 8 }}>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button className="btn btn-secondary btn-sm" onClick={() => void getCurrentWindow().close()}>
+                    <button className="btn btn-secondary btn-sm" onClick={() => void forceCloseWindow()}>
                       退出
                     </button>
                     <button className="btn btn-secondary btn-sm" onClick={loadAdminStatus} disabled={adminLoading}>
@@ -398,6 +563,7 @@ function App() {
               customCratesSource={customCratesSource}
               showToast={showToast}
               adminStatus={adminStatus}
+              confirmAction={confirmAction}
             />
           )}
 
@@ -415,6 +581,7 @@ function App() {
               config={config} 
               setConfig={setConfig}
               showToast={showToast}
+              confirmAction={confirmAction}
             />
           )}
 
@@ -458,6 +625,7 @@ function App() {
               defaultConfigPath={defaultConfigPath}
               updateConfigPath={updateConfigPath}
               resetConfigPath={resetConfigPath}
+              confirmAction={confirmAction}
             />
           )}
         </main>
@@ -473,9 +641,27 @@ function App() {
             <div className="glass-hint">手动方式：{adminHint}</div>
           )}
           <div className="glass-actions">
-            <button className="btn btn-secondary" onClick={() => void getCurrentWindow().close()}>
+            <button className="btn btn-secondary" onClick={() => void forceCloseWindow()}>
               退出
             </button>
+          </div>
+        </div>
+      </GlassOverlay>
+
+      <GlassOverlay active={confirmState.open} fullscreen className="confirm-overlay">
+        <div className="confirm-card">
+          <div className={`confirm-icon ${confirmState.tone}`} />
+          <div className="confirm-content">
+            <div className="confirm-title">{confirmState.title}</div>
+            <div className="confirm-message">{confirmState.message}</div>
+            <div className="confirm-actions">
+              <button className="btn btn-secondary" onClick={() => closeConfirm(false)}>
+                {confirmState.cancelLabel}
+              </button>
+              <button className={`btn ${confirmState.tone === "danger" ? "btn-danger" : "btn-primary"}`} onClick={() => closeConfirm(true)}>
+                {confirmState.okLabel}
+              </button>
+            </div>
           </div>
         </div>
       </GlassOverlay>
@@ -491,7 +677,7 @@ function App() {
         }
         .toast {
           position: fixed;
-          top: 18px;
+          bottom: 18px;
           right: 20px;
           display: flex;
           align-items: flex-start;
@@ -504,6 +690,7 @@ function App() {
           z-index: 1000;
           min-width: 220px;
           max-width: 320px;
+          pointer-events: none;
           animation: slideIn 0.25s ease;
         }
         .toast.success {
@@ -549,6 +736,183 @@ function App() {
         }
         .glass-overlay.loading {
           z-index: 2100;
+        }
+        .glass-overlay.confirm-overlay {
+          background: radial-gradient(circle at 15% 10%, rgba(40, 80, 120, 0.35), rgba(8, 12, 16, 0.75));
+          backdrop-filter: blur(18px) saturate(150%);
+        }
+        .confirm-card {
+          display: flex;
+          gap: 16px;
+          width: min(520px, 90vw);
+          padding: 18px 20px;
+          border-radius: 16px;
+          background: rgba(18, 24, 32, 0.85);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+        }
+        .confirm-icon {
+          width: 42px;
+          height: 42px;
+          border-radius: 14px;
+          background: rgba(56, 189, 248, 0.18);
+          border: 1px solid rgba(56, 189, 248, 0.5);
+          box-shadow: inset 0 0 16px rgba(56, 189, 248, 0.35);
+        }
+        .confirm-icon.warning {
+          background: rgba(250, 204, 21, 0.15);
+          border-color: rgba(250, 204, 21, 0.6);
+          box-shadow: inset 0 0 16px rgba(250, 204, 21, 0.35);
+        }
+        .confirm-icon.danger {
+          background: rgba(239, 68, 68, 0.15);
+          border-color: rgba(239, 68, 68, 0.6);
+          box-shadow: inset 0 0 16px rgba(239, 68, 68, 0.35);
+        }
+        .confirm-content {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          flex: 1;
+        }
+        .confirm-title {
+          font-size: 14px;
+          font-weight: 600;
+        }
+        .confirm-message {
+          font-size: 12px;
+          color: var(--text-secondary);
+          line-height: 1.5;
+          white-space: pre-line;
+        }
+        .confirm-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 10px;
+          margin-top: 4px;
+        }
+        .btn-danger {
+          background: var(--error-color);
+          border-color: var(--error-color);
+        }
+        .btn-danger:hover {
+          filter: brightness(1.05);
+        }
+        .dirty-badge {
+          padding: 4px 10px;
+          font-size: 11px;
+          font-weight: 600;
+          border-radius: 999px;
+          color: var(--error-color);
+          border: 1px solid rgba(239, 68, 68, 0.45);
+          background: rgba(239, 68, 68, 0.12);
+        }
+        .save-attention {
+          position: relative;
+          overflow: hidden;
+          box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.6), 0 16px 32px rgba(56, 189, 248, 0.28);
+          animation: savePulse 1.4s ease-in-out infinite;
+        }
+        .save-attention::after {
+          content: "";
+          position: absolute;
+          top: -40%;
+          left: -60%;
+          width: 60%;
+          height: 180%;
+          background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.7), transparent);
+          opacity: 0.7;
+          transform: translateX(-120%);
+          animation: saveShimmer 1.6s linear infinite;
+          pointer-events: none;
+        }
+        @keyframes savePulse {
+          0%, 100% { box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.55), 0 16px 32px rgba(56, 189, 248, 0.25); }
+          50% { box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.95), 0 20px 38px rgba(56, 189, 248, 0.4); }
+        }
+        @keyframes saveShimmer {
+          to { transform: translateX(220%); }
+        }
+        .header-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+        }
+        .header-actions {
+          display: flex;
+          gap: 12px;
+          align-items: center;
+          position: relative;
+        }
+        .header-actions-alert {
+          padding: 6px 8px;
+          border-radius: 12px;
+          background: rgba(56, 189, 248, 0.08);
+          border: 1px solid rgba(56, 189, 248, 0.45);
+          overflow: hidden;
+        }
+        .header-actions-alert::before {
+          content: "";
+          position: absolute;
+          inset: -2px;
+          border-radius: 14px;
+          border: 1px solid rgba(56, 189, 248, 0.8);
+          box-shadow: 0 0 18px rgba(56, 189, 248, 0.35);
+          animation: headerPulse 1.6s ease-in-out infinite;
+          pointer-events: none;
+        }
+        .header-actions-alert::after {
+          content: "";
+          position: absolute;
+          top: -40%;
+          left: -40%;
+          width: 40%;
+          height: 180%;
+          background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+          animation: headerSweep 1.6s linear infinite;
+          pointer-events: none;
+        }
+        .save-strip {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 8px 12px;
+          border-radius: 10px;
+          border: 1px solid rgba(56, 189, 248, 0.5);
+          background: linear-gradient(120deg, rgba(56, 189, 248, 0.12), rgba(16, 24, 32, 0.7));
+          position: relative;
+          overflow: hidden;
+        }
+        .save-strip::after {
+          content: "";
+          position: absolute;
+          top: 0;
+          left: -30%;
+          width: 40%;
+          height: 2px;
+          background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.9), transparent);
+          animation: stripScan 1.8s linear infinite;
+          pointer-events: none;
+        }
+        .save-strip-main {
+          font-size: 12px;
+          font-weight: 600;
+        }
+        .save-strip-sub {
+          font-size: 11px;
+          color: var(--text-secondary);
+        }
+        @keyframes headerPulse {
+          0%, 100% { opacity: 0.65; }
+          50% { opacity: 1; }
+        }
+        @keyframes headerSweep {
+          to { transform: translateX(220%); }
+        }
+        @keyframes stripScan {
+          to { transform: translateX(220%); }
         }
         .glass-panel {
           display: flex;

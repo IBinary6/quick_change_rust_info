@@ -31,3 +31,7 @@ AGENTS.md
 contexts/
 /.codex/plan/*.md
 /.codex/prompts/speckit.analyze.md
+bun.lock
+.opencode/command/openspec-apply.md
+.opencode/command/openspec-archive.md
+.opencode/command/openspec-proposal.md

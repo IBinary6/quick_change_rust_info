@@ -1,14 +1,15 @@
 
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { confirm } from "@tauri-apps/plugin-dialog";
 import { CargoConfig, TARGET_PLATFORMS, WRAPPER_OPTIONS } from "@/types";
 import { GlassOverlay } from "@/components/GlassOverlay";
+import { ConfirmAction } from "@/lib/confirm";
 
 interface Props {
   config: CargoConfig;
   setConfig: (c: CargoConfig) => void;
   showToast: (msg: string, type: "success" | "error") => void;
+  confirmAction: ConfirmAction;
 }
 
 interface CacheStats {
@@ -18,7 +19,7 @@ interface CacheStats {
   git_path: string;
 }
 
-export function ToolsTab({ config, setConfig, showToast }: Props) {
+export function ToolsTab({ config, setConfig, showToast, confirmAction }: Props) {
   const [sccacheInstalled, setSccacheInstalled] = useState<boolean | null>(null);
   const [installedTargets, setInstalledTargets] = useState<string[]>([]);
   const [installingTarget, setInstallingTarget] = useState("");
@@ -59,9 +60,12 @@ export function ToolsTab({ config, setConfig, showToast }: Props) {
 
   async function handleCleanup(target: "registry" | "git", size: number) {
     const sizeStr = formatSize(size);
-    const confirmed = await confirm(`确定要清理 ${target} 缓存吗？\n这将释放 ${sizeStr} 空间。\n下次构建时需要重新下载依赖。`, {
+    const confirmed = await confirmAction({
       title: "清理缓存",
-      kind: "warning"
+      message: `确定要清理 ${target} 缓存吗？\n这将释放 ${sizeStr} 空间。\n下次构建时需要重新下载依赖。`,
+      okLabel: "确认清理",
+      cancelLabel: "取消",
+      tone: "warning"
     });
     if (!confirmed) return;
 
