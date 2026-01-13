@@ -1,7 +1,7 @@
 # Cargo Assistant (Rust 配置助手)
 
 <div align="center">
-  <img src="https://tauri.app/img/icon.png" width="128" height="128" />
+  <img src="./show/icon.png" width="128" height="128" />
   <h1>Cargo Assistant</h1>
   <p>
     一个现代化的、跨平台的图形界面工具，用于轻松管理 Cargo 配置 (<code>~/.cargo/config.toml</code>)。
@@ -10,6 +10,7 @@
     <b>🚀 开源 | ⚡ 高效 | 🎨 美观</b>
   </p>
 </div>
+
 
 ---
 
@@ -29,8 +30,14 @@
 
 ## 📸 界面预览
 
-_(此处可添加截图)_
-
+![](./show/1.png)
+![](./show/2.png)
+![](./show/3.png)
+![](./show/4.png)
+![](./show/5.png)
+![](./show/6.png)
+![](./show/7.png)
+![](./show/8.png)
 - **Dashboard**: 清晰的侧边栏导航。
 - **工具链检测**: 自动检测环境缺失工具并提供一键安装。
 - **暗黑模式**: 精心设计的深色主题，专业且护眼。
@@ -83,4 +90,4 @@ npm run tauri build
 
 ## 📄 许可证
 
-本项目采用 MIT 许可证 - 详情请参阅 [LICENSE](LICENSE) 文件。
+本项目采用 MIT 许可证 
